@@ -1,0 +1,160 @@
+body {
+    background-image: url("images/background.jpg"); /* Replace with your image path */
+    background-size: cover; /* Scales image to cover entire viewport */
+    background-position: center; /* Centers the image */
+    background-attachment: fixed; /* Keeps the background fixed on scroll */
+    background-repeat: no-repeat; /* Prevents tiling */
+}
+/* Original background */
+body.original-background {
+    background-image: url("images/background.png"); /* Path to original background */
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+}
+
+/* Time-up background */
+body.time-up-background {
+    background-image: url("images/time-up-background.png"); /* Path to time-up background */
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+}
+#game {
+    display: flex;
+    justify-content: center;
+    padding-top: 40px; /* Adds 100px padding to the top */
+    margin: 0 auto;
+    width: 80%;
+}
+
+#scoring {
+    margin-top: 20px; /* Adds spacing above the scoring table */
+    width: 250px;
+    text-align: center;
+}
+
+#board-container {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}}
+
+#countdown {
+    position: absolute;
+    top: -40px;
+    font-size: 40px;
+    font-weight: bold;
+    display: none;
+    color: red;
+}
+
+#board {
+    display: grid;
+    grid-template-columns: repeat(4, 80px);
+    grid-template-rows: repeat(4, 80px);
+    gap: 10px;
+}
+
+.tile, #timer, #time-up {
+    font-size: 60px;
+    font-weight: bold;
+    font-family: Arial, sans-serif;
+	color: white;
+}
+
+.tile {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 80px;
+    height: 80px;
+    background-image: url("images/tile.png");
+    background-size: cover;
+    background-position: center;
+}
+
+#timer {
+    margin-top: 20px;
+	margin-bottom: 20px;
+}
+
+#time-up {
+    position: absolute;
+    top: -20px; /* Adjust as needed to position above the grid */
+    font-size: 30px;
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    width: 100%; /* Centers text horizontally */
+    display: none; /* Hidden initially */
+}
+
+#buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+button {
+    font-size: 24px;
+    font-weight: bold;
+    color: white; /* Text color */
+    background-image: url("images/square-texture.png"); /* Replace with your texture path */
+    background-size: cover; /* Ensures texture fills the button */
+    background-position: center;
+    background-repeat: no-repeat;
+    width: 170px; /* Adjust as needed */
+    height: 80px; /* Makes the button square */
+    border: none; /* Removes default border */
+    border-radius: 8px; /* Slightly rounded corners */
+    cursor: pointer; /* Changes cursor to pointer on hover */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0;
+    transition: transform 0.1s ease; /* Adds a slight scale effect on click */
+}
+
+/* Button hover and active effects */
+button:hover {
+    transform: scale(1.05); /* Slightly enlarges the button on hover */
+}
+
+button:active {
+    transform: scale(0.95); /* Shrinks the button slightly when pressed */
+}
+
+/* Scoring table styling */
+table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+	font-size: 18px;
+    font-family: Arial, sans-serif;
+	color: white;
+}
+
+table, td {
+    border: 0px solid #333;
+    padding: 8px;
+    text-align: left;
+    width: 250px;
+	font-size: 18px;
+	font-weight: bold;
+    font-family: Arial, sans-serif;
+	color: white;
+}
+h3 {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333; /* Adjust color as needed */
+    text-align: center;
+    margin-top: 20px;
+    font-family: Arial, sans-serif;
+	color: white;
+}

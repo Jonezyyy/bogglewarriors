@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boggle Warriors</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game">
+    <div id="board-container">
+        <!-- Time-up message at the top of the game grid -->
+        <div id="time-up" style="display: none;">Aika loppu!</div>
+        <div id="timer">1:30</div>
+        <div id="board">
+            <!-- 16 letter tiles will go here -->
+        </div>
+        <div id="buttons">
+            <button id="newGame">Uusi peli</button>
+            <button id="pause">Tauko</button>
+        </div>
+        <!-- Scoring table -->
+        <div id="scoring">
+            <h3>Boggle pisteet</h3>
+            <table>
+                <tr><td>3-4 kirjainta</td><td>1 pistettä</td></tr>
+                <tr><td>5 kirjainta</td><td>2 pistettä</td></tr>
+                <tr><td>6 kirjainta</td><td>3 pistettä</td></tr>
+                <tr><td>7 kirjainta</td><td>5 pistettä</td></tr>
+                <tr><td>8+ kirjainta</td><td>11 pistettä</td></tr>
+				<tr><td>"Jouska"</td><td>100 pistettä</td></tr>
+            </table>
+        </div>
+    </div>
+</div>
+
+
+    <!-- Add audio element for the time-up sound -->
+    <audio id="timeUpSound" src="sounds/time_up.mp3"></audio>
+
+    <script src="script.js"></script>
+</body>
+</html>
