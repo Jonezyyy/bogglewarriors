@@ -227,7 +227,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         async validateWord(word) {
             try {
-                const response = await fetch(`http://localhost:3000/validate-word/${word}`);
+                const response = await fetch(`https://bogglewarriors-com.onrender.com/validate-word/${word}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
                 if (data && data.exists) {
