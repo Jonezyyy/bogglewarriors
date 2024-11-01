@@ -43,7 +43,6 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("submitWord").addEventListener("click", () => this.submitWord());
         }
 
-        // Clear selected tiles if clicking outside game board and buttons
         handleOutsideClick(event) {
             const isClickInsideGame = this.boardElement.contains(event.target) || 
                                       event.target.closest("#newGame") || 
@@ -116,11 +115,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }, 1000);
         }
-		
-		setInitialBackground() {
-			document.body.classList.add("background");
-		}
 
+        setInitialBackground() {
+            document.body.classList.add("background");
+        }
 
         endGame() {
             clearInterval(this.timerInterval);
@@ -193,52 +191,53 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         async submitWord() {
-			const word = this.currentWord.join('');
-			if (word.length < 3) {
-				console.log("Word must be at least 3 letters long");
-			return;
-		}
+            const word = this.currentWord.join('');
+            if (word.length < 3) {
+                console.log("Word must be at least 3 letters long");
+                return;
+            }
 
-		if (this.foundWords.has(word)) {
-			console.log("Word has already been found");
-			this.timeUpElement.textContent = "Word already used"; // Set message
-			this.timeUpElement.style.display = "block"; // Show message
-			this.incorrectAnswerSound.play(); // Play error sound
-			this.resetSelectedTiles(); // Unselect everything
-			this.currentWord = []; // Clear the current word
-			this.selectedTiles = []; // Clear selected tiles
-        
-        // Hide the message after a short delay (e.g., 2 seconds)
-			setTimeout(() => {
-				this.timeUpElement.style.display = "none";
-				this.timeUpElement.textContent = "Time is up!"; // Reset default message
-        }, 2000);
+            // Check if word has already been found
+            if (this.foundWords.has(word)) {
+                console.log("Word has already been found");
+                this.timeUpElement.textContent = "Word already used";
+                this.timeUpElement.style.display = "block";
+                this.incorrectAnswerSound.play();
+                this.resetSelectedTiles();
+                this.currentWord = [];
+                this.selectedTiles = [];
 
-        return;
-		}
+                setTimeout(() => {
+                    this.timeUpElement.style.display = "none";
+                    this.timeUpElement.textContent = "Time is up!";
+                }, 2000);
+                return;
+            }
 
-    await this.validateWord(word);
-    this.resetSelectedTiles();
-    this.currentWord = [];
-    this.selectedTiles = [];
+            // Validate the word only if it’s not a duplicate
+            const isValid = await this.validateWord(word);
+            if (isValid) {
+                this.correctAnswerSound.play();
+                this.foundWords.add(word);
+                this.updateSidebar();
+            } else {
+                this.incorrectAnswerSound.play();
+            }
 
-
-}
+            this.resetSelectedTiles();
+            this.currentWord = [];
+            this.selectedTiles = [];
+        }
 
         async validateWord(word) {
             try {
                 const response = await fetch(`https://bogglewarriors-com.onrender.com/validate-word/${word}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
-                if (data && data.exists) {
-                    this.correctAnswerSound.play();
-                    this.foundWords.add(word);
-                    this.updateSidebar();
-                } else {
-                    this.incorrectAnswerSound.play();
-                }
+                return data.exists;
             } catch (error) {
                 console.error("Error validating word:", error);
+                return false;
             }
         }
 
@@ -283,19 +282,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         setTimeUpBackground() {
-		document.body.style.backgroundImage = "url('images/time_up_background.png')";
-		document.body.classList.add("time-up-background");
-		}
-
-		resetBackground() {
-		document.body.style.backgroundImage = ""; // Clears the time-up background
-		document.body.classList.remove("time-up-background");
-		document.body.classList.add("background");
-		}
-
-        setTimeUpBackground() {
-            document.body.classList.remove("background");
+            document.body.style.backgroundImage = "url('images/time_up_background.png')";
             document.body.classList.add("time-up-background");
+        }
+
+        resetBackground() {
+            document.body.style.backgroundImage = "";
+            document.body.classList.remove("time-up-background");
+            document.body.classList.add("background");
         }
 
         clearIntervals(type = "all") {
