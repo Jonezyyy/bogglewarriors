@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     class BoggleGame {
         constructor() {
-            this.initialLetters = ["B", "O", "G", "G", "L", "E", "W", "A", "R", "R", "I", "O", "R", "S"];
+            this.initialLetters = ["B", "O", "G", "G", "L", "E", " ", " ", "W", "A", "R", "R", "I", "O", "R", "S"];
             this.finnishDice = [
                 "AISPUJ", "AEENEA", "ÄIÖNST", "ANPRSK", "APHSKO", 
                 "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU", 
@@ -12,10 +12,10 @@ document.addEventListener("DOMContentLoaded", () => {
             this.boardElement = document.getElementById("board");
             this.timerElement = document.getElementById("timer");
             this.sidebarElement = document.getElementById("sidebar");
-            this.timeUpElement = document.getElementById("time-up");
             this.timeUpSound = new Audio("sounds/time_up.mp3");
             this.correctAnswerSound = new Audio("sounds/correct_answer.mp3");
             this.incorrectAnswerSound = new Audio("sounds/incorrect_answer.mp3");
+			this.invalidWordSubmitted = false; // New flag for invalid word submission
 
             // Game state
             this.timeLeft = 90;
@@ -43,18 +43,19 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("submitWord").addEventListener("click", () => this.submitWord());
         }
 
-        handleOutsideClick(event) {
-            const isClickInsideGame = this.boardElement.contains(event.target) || 
-                                      event.target.closest("#newGame") || 
-                                      event.target.closest("#pause") || 
-                                      event.target.closest("#submitWord");
+		handleOutsideClick(event) {
+			const isClickInsideGame = this.boardElement.contains(event.target) || 
+									  event.target.closest("#newGame") || 
+									  event.target.closest("#pause") || 
+									  event.target.closest("#submitWord");
 
-            if (!isClickInsideGame) {
-                this.resetSelectedTiles();
-                this.currentWord = [];
-                this.selectedTiles = [];
-            }
-        }
+			if (!isClickInsideGame) {
+				this.resetSelectedTiles();
+				this.currentWord = [];
+				this.selectedTiles = [];
+				document.getElementById("selected-word").textContent = ""; // Clear selected word display
+			}
+		}
 
         initializeBoard() {
             this.boardElement.innerHTML = '';
@@ -84,7 +85,7 @@ document.addEventListener("DOMContentLoaded", () => {
             this.currentWord = [];
             this.selectedTiles = [];
             this.updateSidebar();
-            this.timeUpElement.style.display = "none";
+            this.timerElement.style.color = ""; // Reset any styling for "Time’s up" message
         }
 
         startCountdown() {
@@ -115,6 +116,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }, 1000);
         }
+		
+		updateSelectedWordDisplay() {
+			document.getElementById("selected-word").textContent = this.currentWord.join('');
+		}
 
         setInitialBackground() {
             document.body.classList.add("background");
@@ -122,8 +127,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         endGame() {
             clearInterval(this.timerInterval);
-            this.timerElement.textContent = "0:00";
-            this.timeUpElement.style.display = "block";
+            this.timerElement.textContent = "Time’s up!";
+            this.timerElement.style.color = "red"; // Set text color to red to indicate end of game
             this.isGameOver = true;
             this.timeUpSound.play();
             this.setTimeUpBackground();
@@ -146,92 +151,124 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         createTile(letter, row, col) {
-            const tile = document.createElement("div");
-            tile.classList.add("tile");
-            tile.textContent = letter;
-            tile.dataset.row = row;
-            tile.dataset.col = col;
-            tile.addEventListener("click", () => this.selectTile(tile));
-            return tile;
-        }
+			const tile = document.createElement("div");
+			tile.classList.add("tile");
+			tile.textContent = letter;
+			tile.dataset.row = row;
+			tile.dataset.col = col;
+			tile.addEventListener("click", () => this.selectTile(tile)); // Arrow function to preserve `this` context
+				return tile;
+		}
+		
+		selectTile(tile) {
+			if (this.isGameOver) return;
 
-        isAdjacent(tile) {
-            if (this.selectedTiles.length === 0) return true;
+			// Clear "selected word" field if previous word was invalid
+			if (this.invalidWordSubmitted) {
+				document.getElementById("selected-word").textContent = ""; // Clear message
+				this.invalidWordSubmitted = false; // Reset the flag
+			}
 
-            const lastTile = this.selectedTiles[this.selectedTiles.length - 1];
-            const lastRow = parseInt(lastTile.dataset.row);
-            const lastCol = parseInt(lastTile.dataset.col);
-            const newRow = parseInt(tile.dataset.row);
-            const newCol = parseInt(tile.dataset.col);
+			// If the tile is already selected, deselect it
+			if (this.selectedTiles.includes(tile)) {
+				tile.classList.remove("selected");
+				
+				// Find the last occurrence of the tile's letter in `currentWord`
+				for (let i = this.selectedTiles.length - 1; i >= 0; i--) {
+					if (this.selectedTiles[i] === tile) {
+						this.selectedTiles.splice(i, 1);  // Remove the specific tile
+						this.currentWord.splice(i, 1);    // Remove the corresponding letter
+						break;
+					}
+				}
 
-            return (
-                Math.abs(lastRow - newRow) <= 1 &&
-                Math.abs(lastCol - newCol) <= 1
-            );
-        }
+				this.updateSelectedWordDisplay(); // Update displayed word after deselection
+				return;
+			}
 
-        selectTile(tile) {
-            if (this.isGameOver) return;
+			// Check if the tile is adjacent to the last selected tile
+			if (this.selectedTiles.length > 0 && !this.isAdjacent(tile)) {
+				console.log("Tile is not adjacent to the previous one");
+				return;
+			}
 
-            if (this.selectedTiles.includes(tile)) {
-                tile.classList.remove("selected");
-                this.selectedTiles = this.selectedTiles.filter(t => t !== tile);
-                this.currentWord = this.currentWord.filter(letter => letter !== tile.textContent);
-                return;
-            }
+			// Select the tile and add it to the current word
+			tile.classList.add("selected");
+			this.currentWord.push(tile.textContent);
+			this.selectedTiles.push(tile);
+			this.updateSelectedWordDisplay(); // Update displayed letters
+		}
 
-            if (this.selectedTiles.length > 0 && !this.isAdjacent(tile)) {
-                console.log("Tile is not adjacent to the previous one");
-                return;
-            }
 
-            tile.classList.add("selected");
-            this.currentWord.push(tile.textContent);
-            this.selectedTiles.push(tile);
-        }
+		
+		isAdjacent(tile) {
+			if (this.selectedTiles.length === 0) return true;
 
-        async submitWord() {
-            const word = this.currentWord.join('');
-            if (word.length < 3) {
-                console.log("Word must be at least 3 letters long");
-                return;
-            }
+			const lastTile = this.selectedTiles[this.selectedTiles.length - 1];
+			const lastRow = parseInt(lastTile.dataset.row);
+			const lastCol = parseInt(lastTile.dataset.col);
+			const newRow = parseInt(tile.dataset.row);
+			const newCol = parseInt(tile.dataset.col);
 
-            // Check if word has already been found
-            if (this.foundWords.has(word)) {
-                console.log("Word has already been found");
-                this.timeUpElement.textContent = "Word already used";
-                this.timeUpElement.style.display = "block";
-                this.incorrectAnswerSound.play();
-                this.resetSelectedTiles();
-                this.currentWord = [];
-                this.selectedTiles = [];
+			return (
+				Math.abs(lastRow - newRow) <= 1 &&
+				Math.abs(lastCol - newCol) <= 1
+			);
+		}
 
-                setTimeout(() => {
-                    this.timeUpElement.style.display = "none";
-                    this.timeUpElement.textContent = "Time is up!";
-                }, 2000);
-                return;
-            }
 
-            // Validate the word only if it’s not a duplicate
-            const isValid = await this.validateWord(word);
-            if (isValid) {
-                this.correctAnswerSound.play();
-                this.foundWords.add(word);
-                this.updateSidebar();
-            } else {
-                this.incorrectAnswerSound.play();
-            }
 
-            this.resetSelectedTiles();
-            this.currentWord = [];
-            this.selectedTiles = [];
-        }
+		async submitWord() {
+			const word = this.currentWord.join('');
+
+			if (word.length < 3) {
+				console.log("Word must be at least 3 letters long");
+				this.incorrectAnswerSound.play();
+				this.resetSelectedTiles();
+				this.currentWord = [];
+				this.selectedTiles = [];
+				this.updateSelectedWordDisplay();
+				return;
+			}
+
+			// Check if word has already been found
+			if (this.foundWords.has(word)) {
+				console.log("Word has already been found");
+				document.getElementById("selected-word").textContent = "Word already used"; // Show message in selected-word
+				this.incorrectAnswerSound.play();
+				this.resetSelectedTiles();
+				this.currentWord = [];
+				this.selectedTiles = [];
+				
+				setTimeout(() => {
+					document.getElementById("selected-word").textContent = ""; // Clear the message after a delay
+				}, 2000);
+				
+				return;
+			}
+
+			const isValid = await this.validateWord(word);
+			if (isValid) {
+				this.correctAnswerSound.play();
+				this.foundWords.add(word);
+				this.updateSidebar();
+				this.invalidWordSubmitted = false;
+			} else {
+				document.getElementById("selected-word").textContent = `${word} is not a valid word`;
+				this.incorrectAnswerSound.play();
+				this.invalidWordSubmitted = true;
+			}
+
+			this.resetSelectedTiles();
+			this.currentWord = [];
+			this.selectedTiles = [];
+		}
+
+
 
         async validateWord(word) {
             try {
-                const response = await fetch(`https://bogglewarriors-com.onrender.com/validate-word/${word}`);
+                const response = await fetch(`http://192.168.0.73:3000/validate-word/${word}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
                 return data.exists;
