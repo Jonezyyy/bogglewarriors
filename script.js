@@ -268,7 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         async validateWord(word) {
             try {
-                const response = await fetch(`http://192.168.0.73:3000/validate-word/${word}`);
+                const response = await fetch(`http://192.168.0.73:5000/validate-word/${word}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 const data = await response.json();
                 return data.exists;

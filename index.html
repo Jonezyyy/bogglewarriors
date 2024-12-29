@@ -7,38 +7,21 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<script>
-        // Function to wake up the server by making an API call
-        function wakeUpServer() {
-            fetch('https://bogglewarriors-com.onrender.com/validate-word/testi')
-                .then(response => {
-                    if (response.ok) {
-                        console.log('Server is awake and ready!');
-                    } else {
-                        console.error('Failed to wake up server:', response.status);
-                    }
-                })
-                .catch(error => console.error('Error waking up server:', error));
-        }
 
-        // Wake up the server when the page loads
-        window.addEventListener('load', wakeUpServer);
-    </script>
     <div id="game">
         <div id="board-container">
             <div id="timer">1:30</div>
+            <!-- New text field to display selected letters -->
+            <div id="selected-word">Get ready!</div>
             <div id="board"></div>
-            <div id="time-up" style="display: none;">Time is up!</div>
         </div>
 
-        <!-- Button container at the top -->
         <div id="buttons">
             <button id="newGame">New</button>
             <button id="pause">Pause</button>
             <button id="submitWord">Submit</button>
         </div>
 
-        <!-- Scoring Table positioned directly under buttons -->
         <div id="sidebar">
             <h3>Found Words</h3>
             <ul id="foundWordsList"></ul>

@@ -1,3 +1,22 @@
 // start server
 node server.js 
 
+
+git add server.js
+git commit -m "Update API URL in server.js"
+git push origin main
+
+docker tag my-node-api Jonezyyy/my-node-api:v1
+docker push Jonezyyy/my-node-api:v1
+
+https://hub.docker.com/r/jonezyyy/my-node-api
+
+
+az container create ^
+    --resource-group my-resource-group ^
+    --name my-node-api-container ^
+    --image jonezyyy/my-node-api:v1 ^
+    --cpu 1 ^
+    --memory 1 ^
+    --ports 3000 ^
+    --dns-name-label my-node-api>

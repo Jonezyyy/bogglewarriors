@@ -6,13 +6,14 @@ body {
     background-position: center;
     background-attachment: fixed;
     background-repeat: no-repeat;
+	margin-top: 0px;
 }
 
 /* Game layout */
 #game {
     display: flex;
     justify-content: center;
-    padding-top: 50px;
+    padding-top: 20px;
     margin: 0 auto;
     width: 80%;
     flex-direction: column;
@@ -37,13 +38,21 @@ body {
 }
 
 #timer {
-    margin-top: 20px;
-    font-size: 30px;
+    margin-top: 0px;
+    font-size: 40px;
     font-weight: bold;
     color: white;
 }
+#selected-word {
+    height: 40px;
+    font-size: 20px;
+    font-weight: bold;
+    color: white;
+	margin-top: 15px;
+}
 
 #board {
+	margin-top: 10px;
     display: grid;
     grid-template-columns: repeat(4, 80px);
     grid-template-rows: repeat(4, 80px);
