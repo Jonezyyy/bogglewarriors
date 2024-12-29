@@ -1,20 +1,20 @@
-# Use Node.js LTS as the base image
-FROM node:16
+# Use the official Node.js 22.11 image from Docker Hub
+FROM node:22.11
 
-# Set the working directory in the container
+# Set the working directory inside the container
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json first for dependency installation
+# Copy package.json and package-lock.json (if available)
 COPY package*.json ./
 
-# Install dependencies in the container
-RUN npm install --build-from-source
+# Install production dependencies
+RUN npm install --production
 
-# Copy the rest of the application files
+# Copy the rest of your application's source code
 COPY . .
 
-# Expose the application port
+# Expose the port your application will run on
 EXPOSE 3000
 
-# Start the server
+# Command to run your application
 CMD ["node", "server.js"]
