@@ -1,93 +1,109 @@
-/* Basic body styling */
+/* ─── CSS Custom Properties ─────────────────────────────────────────────── */
+:root {
+    --tile-size: 80px;
+    --tile-font: 42px;
+    --gap: 10px;
+    --board-size: calc(4 * var(--tile-size) + 3 * var(--gap));
+}
+
+/* ─── Base Body ──────────────────────────────────────────────────────────── */
 body {
     font-family: Arial, sans-serif;
-    background-image: url("images/background.jpg"); /* Replace with your image path */
+    background-image: url("images/background.jpg");
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
     background-repeat: no-repeat;
-	margin-top: 0px;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
 }
 
-/* Game layout */
+/* ─── Game Layout ────────────────────────────────────────────────────────── */
 #game {
     display: flex;
     justify-content: center;
     padding-top: 20px;
     margin: 0 auto;
-    width: 80%;
+    width: 90%;
+    max-width: 600px;
     flex-direction: column;
     align-items: center;
+    padding-bottom: 30px;
 }
 
-/* Sidebar styling */
-#sidebar {
-    width: 200px;
-    color: white;
-    font-size: 18px;
-    text-align: center;
-    margin-top: 10px; /* Added margin to separate sidebar from buttons */
-}
-
-/* Board and button styling */
+/* ─── Board Container ────────────────────────────────────────────────────── */
 #board-container {
     display: flex;
     flex-direction: column;
     align-items: center;
     position: relative;
+    width: 100%;
 }
 
+/* ─── Timer ──────────────────────────────────────────────────────────────── */
 #timer {
     margin-top: 0px;
     font-size: 40px;
     font-weight: bold;
     color: white;
 }
+
+/* ─── Selected Word Display ──────────────────────────────────────────────── */
 #selected-word {
     height: 40px;
     font-size: 20px;
     font-weight: bold;
     color: white;
-	margin-top: 15px;
+    margin-top: 15px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
 }
 
+/* ─── Board ──────────────────────────────────────────────────────────────── */
 #board {
-	margin-top: 10px;
     display: grid;
-    grid-template-columns: repeat(4, 80px);
-    grid-template-rows: repeat(4, 80px);
-    gap: 10px;
+    grid-template-columns: repeat(4, var(--tile-size));
+    grid-template-rows: repeat(4, var(--tile-size));
+    gap: var(--gap);
     margin-top: 10px;
-    margin-bottom: 20px; /* Adds padding between the game board and buttons */
+    margin-bottom: 20px;
 }
 
+/* ─── Tiles ──────────────────────────────────────────────────────────────── */
 .tile {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 80px;
-    height: 80px;
-    font-size: 42px;
+    width: var(--tile-size);
+    height: var(--tile-size);
+    font-size: var(--tile-font);
     color: white;
     font-weight: bold;
-    background-image: url("images/tile.png"); /* Default texture */
+    background-image: url("images/tile.png");
     background-size: cover;
     background-position: center;
     border-radius: 8px;
     cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
 }
 
-/* Feedback for selected tiles */
 .tile.selected {
-    background-image: url("images/tile_selected.png"); /* Selected texture */
+    background-image: url("images/tile_selected.png");
 }
 
-/* Shake animation for invalid selections */
+/* ─── Shake Animation ────────────────────────────────────────────────────── */
 @keyframes shake {
-    0% { transform: translateX(0); }
-    25% { transform: translateX(-5px); }
-    50% { transform: translateX(5px); }
-    75% { transform: translateX(-5px); }
+    0%   { transform: translateX(0); }
+    25%  { transform: translateX(-5px); }
+    50%  { transform: translateX(5px); }
+    75%  { transform: translateX(-5px); }
     100% { transform: translateX(0); }
 }
 
@@ -95,6 +111,7 @@ body {
     animation: shake 0.3s ease;
 }
 
+/* ─── Time Up ────────────────────────────────────────────────────────────── */
 #time-up {
     position: absolute;
     top: -40px;
@@ -103,40 +120,58 @@ body {
     font-weight: bold;
 }
 
+/* ─── Buttons ────────────────────────────────────────────────────────────── */
 #buttons {
     display: flex;
     gap: 10px;
     margin-top: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 
 button {
-    height: 80px; /* Fixed height */
-    padding: 0 20px; /* Horizontal padding to give space around the text */
+    height: 80px;
+    padding: 0 20px;
     font-size: 24px;
     cursor: pointer;
     border: none;
-    border-radius: 5px;
-    background-image: url("images/button_texture.png"); /* Textured background */
+    border-radius: 15px;
+    background-image: url("images/button_texture.png");
     background-size: cover;
     color: white;
-	border-radius: 15px;
     font-weight: bold;
-    min-width: 100px; /* Optional: minimum width for consistent button sizing */
-    white-space: nowrap; /* Prevents text wrapping if button text is long */
+    min-width: 100px;
+    white-space: nowrap;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
 }
 
-
 button:hover {
-    background-color: rgba(255, 255, 255, 0.2); /* Semi-transparent hover effect */
+    background-color: rgba(255, 255, 255, 0.2);
 }
 
 button:active {
-    background-color: rgba(255, 255, 255, 0.3); /* Active effect */
+    background-color: rgba(255, 255, 255, 0.3);
 }
 
-/* Sidebar list and score styling */
+/* ─── Sidebar ────────────────────────────────────────────────────────────── */
+#sidebar {
+    width: 100%;
+    max-width: var(--board-size);
+    color: white;
+    font-size: 18px;
+    text-align: center;
+    margin-top: 10px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
 #sidebar h3, #sidebar h4 {
     margin: 0;
+    position: sticky;
+    top: 0;
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 4px 0;
 }
 
 #sidebar ul {
@@ -148,4 +183,128 @@ button:active {
 
 #sidebar li {
     padding: 5px 0;
+}
+
+/* ─── Tablet (max 600px) ─────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    :root {
+        --tile-size: 68px;
+        --tile-font: 34px;
+        --gap: 8px;
+    }
+
+    #timer {
+        font-size: 32px;
+    }
+
+    #selected-word {
+        font-size: 17px;
+        height: 34px;
+    }
+
+    button {
+        height: 64px;
+        font-size: 20px;
+        padding: 0 14px;
+        min-width: 80px;
+    }
+
+    #sidebar {
+        font-size: 16px;
+        max-height: 180px;
+    }
+}
+
+/* ─── Small Mobile (max 400px) ───────────────────────────────────────────── */
+@media (max-width: 400px) {
+    :root {
+        --tile-size: 56px;
+        --tile-font: 28px;
+        --gap: 7px;
+    }
+
+    #game {
+        width: 96%;
+        padding-top: 10px;
+    }
+
+    #timer {
+        font-size: 28px;
+    }
+
+    #selected-word {
+        font-size: 15px;
+        height: 30px;
+        margin-top: 8px;
+    }
+
+    button {
+        height: 56px;
+        font-size: 17px;
+        padding: 0 10px;
+        min-width: 70px;
+    }
+
+    #buttons {
+        gap: 7px;
+        margin-top: 14px;
+    }
+
+    #sidebar {
+        font-size: 14px;
+        max-height: 150px;
+    }
+}
+
+/* ─── Landscape Mobile ───────────────────────────────────────────────────── */
+@media (max-height: 500px) and (orientation: landscape) {
+    :root {
+        --tile-size: 52px;
+        --tile-font: 24px;
+        --gap: 6px;
+    }
+
+    #game {
+        padding-top: 6px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: center;
+        gap: 10px;
+    }
+
+    #board-container {
+        width: auto;
+    }
+
+    #timer {
+        font-size: 24px;
+    }
+
+    #selected-word {
+        font-size: 14px;
+        height: 26px;
+        margin-top: 6px;
+    }
+
+    #buttons {
+        margin-top: 8px;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    button {
+        height: 48px;
+        font-size: 16px;
+        padding: 0 12px;
+    }
+
+    #sidebar {
+        width: 160px;
+        max-height: 260px;
+        margin-top: 0;
+        font-size: 13px;
+        text-align: left;
+        padding-left: 8px;
+    }
 }
