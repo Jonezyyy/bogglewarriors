@@ -1,0 +1,243 @@
+/* ─── Leaderboard button ─────────────────────────────────────────────────── */
+/* Add #leaderboard button alongside your existing buttons in HTML */
+
+/* ─── Shared modal overlay ───────────────────────────────────────────────── */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.75);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal {
+    background: rgba(20, 20, 40, 0.97);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 28px 24px;
+    width: 90%;
+    max-width: 460px;
+    color: white;
+    position: relative;
+}
+
+.modal h2 {
+    margin: 0 0 18px 0;
+    font-size: 24px;
+    text-align: center;
+}
+
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 16px;
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    min-width: unset;
+    height: auto;
+    background-image: none;
+}
+
+.modal-close:hover {
+    color: #aaa;
+    background-color: transparent;
+}
+
+/* ─── Leaderboard modal ──────────────────────────────────────────────────── */
+.lb-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    justify-content: center;
+}
+
+.lb-tab {
+    flex: 1;
+    height: 44px;
+    font-size: 16px;
+    background-image: none;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    color: white;
+    border: none;
+    font-weight: bold;
+    min-width: unset;
+    transition: background-color 0.2s;
+}
+
+.lb-tab.active {
+    background-color: rgba(255, 200, 50, 0.35);
+    color: #ffe066;
+}
+
+.lb-tab:hover:not(.active) {
+    background-color: rgba(255, 255, 255, 0.18);
+    background-image: none;
+}
+
+#leaderboardList {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 340px;
+    overflow-y: auto;
+}
+
+.lb-row {
+    display: grid;
+    grid-template-columns: 28px 1fr auto auto auto;
+    gap: 6px;
+    align-items: center;
+    padding: 8px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 15px;
+}
+
+.lb-row:last-child {
+    border-bottom: none;
+}
+
+.lb-highlight {
+    background: rgba(255, 210, 50, 0.18);
+    border-radius: 8px;
+    border-bottom: none !important;
+    outline: 1px solid rgba(255, 210, 50, 0.5);
+}
+
+.lb-rank {
+    color: #aaa;
+    font-size: 13px;
+}
+
+.lb-name {
+    font-weight: bold;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.lb-score {
+    color: #ffe066;
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+.lb-words {
+    color: #aad4ff;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.lb-date {
+    color: #888;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.lb-loading, .lb-empty, .lb-error {
+    text-align: center;
+    padding: 24px;
+    color: #aaa;
+    font-size: 15px;
+}
+
+.lb-error {
+    color: #ff6666;
+}
+
+/* ─── Nickname modal ─────────────────────────────────────────────────────── */
+#nicknameOverlay .modal p {
+    text-align: center;
+    color: #ccc;
+    margin: 0 0 16px 0;
+    font-size: 15px;
+}
+
+#nicknameInput {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    font-size: 18px;
+    border-radius: 8px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    outline: none;
+    margin-bottom: 8px;
+}
+
+#nicknameInput:focus {
+    border-color: rgba(255, 200, 50, 0.7);
+}
+
+#nicknameError {
+    color: #ff6666;
+    font-size: 13px;
+    min-height: 18px;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.nickname-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.nickname-actions button {
+    flex: 1;
+    height: 52px;
+    font-size: 17px;
+    border-radius: 10px;
+    background-image: none;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    min-width: unset;
+}
+
+#nicknameSubmit {
+    background-color: rgba(255, 200, 50, 0.4);
+    color: white;
+}
+
+#nicknameSubmit:hover {
+    background-color: rgba(255, 200, 50, 0.6);
+}
+
+#nicknameSkip {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: #ccc;
+}
+
+#nicknameSkip:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Responsive tweaks for modals ──────────────────────────────────────── */
+@media (max-width: 400px) {
+    .modal {
+        padding: 20px 14px;
+    }
+
+    .lb-row {
+        font-size: 13px;
+        grid-template-columns: 24px 1fr auto auto auto;
+        gap: 4px;
+    }
+
+    .lb-date {
+        display: none;
+    }
+}

@@ -27,42 +27,57 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 function initializeDatabase() {
     db.serialize(() => {
+        // Words table
         db.run('CREATE TABLE IF NOT EXISTS words (word TEXT PRIMARY KEY)', (err) => {
             if (err) {
-                console.error('Error creating table:', err.message);
+                console.error('Error creating words table:', err.message);
                 return;
             }
 
-            // Check if table is already populated
-            db.get('SELECT COUNT(*) as count FROM words', (err, row) => {
-                if (err) { console.error(err.message); return; }
-
-                if (row.count > 0) {
-                    console.log(`Database already contains ${row.count} words.`);
-                    startServer();
+            // Scores table
+            db.run(`CREATE TABLE IF NOT EXISTS scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nickname TEXT NOT NULL,
+                score INTEGER NOT NULL,
+                word_count INTEGER NOT NULL,
+                created_at INTEGER NOT NULL
+            )`, (err) => {
+                if (err) {
+                    console.error('Error creating scores table:', err.message);
                     return;
                 }
 
-                // Load words from CSV
-                const csvPath = path.resolve(__dirname, 'finnish_words.csv');
-                if (!existsSync(csvPath)) {
-                    console.error('finnish_words.csv not found!');
-                    startServer();
-                    return;
-                }
+                // Check if words table is already populated
+                db.get('SELECT COUNT(*) as count FROM words', (err, row) => {
+                    if (err) { console.error(err.message); return; }
 
-                console.log('Loading words from CSV...');
-                const words = readFileSync(csvPath, 'utf8')
-                    .split('\n')
-                    .map(w => w.trim())
-                    .filter(Boolean);
+                    if (row.count > 0) {
+                        console.log(`Database already contains ${row.count} words.`);
+                        startServer();
+                        return;
+                    }
 
-                const stmt = db.prepare('INSERT OR IGNORE INTO words (word) VALUES (?)');
-                words.forEach(word => stmt.run(word));
-                stmt.finalize((err) => {
-                    if (err) { console.error('Error inserting words:', err.message); }
-                    else { console.log(`Loaded ${words.length} words into database.`); }
-                    startServer();
+                    // Load words from CSV
+                    const csvPath = path.resolve(__dirname, 'finnish_words.csv');
+                    if (!existsSync(csvPath)) {
+                        console.error('finnish_words.csv not found!');
+                        startServer();
+                        return;
+                    }
+
+                    console.log('Loading words from CSV...');
+                    const words = readFileSync(csvPath, 'utf8')
+                        .split('\n')
+                        .map(w => w.trim())
+                        .filter(Boolean);
+
+                    const stmt = db.prepare('INSERT OR IGNORE INTO words (word) VALUES (?)');
+                    words.forEach(word => stmt.run(word));
+                    stmt.finalize((err) => {
+                        if (err) { console.error('Error inserting words:', err.message); }
+                        else { console.log(`Loaded ${words.length} words into database.`); }
+                        startServer();
+                    });
                 });
             });
         });
@@ -96,4 +111,80 @@ app.get('/words', (req, res) => {
         }
         res.json(rows.map(row => row.word));
     });
+});
+
+// Get top 10 leaderboard
+// Query param: ?type=alltime (default) or ?type=weekly
+app.get('/leaderboard', (req, res) => {
+    const type = req.query.type === 'weekly' ? 'weekly' : 'alltime';
+    let whereClause = '';
+    if (type === 'weekly') {
+        const weekAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+        whereClause = `WHERE created_at >= ${weekAgo}`;
+    }
+    const sql = `
+        SELECT nickname, score, word_count, created_at
+        FROM scores
+        ${whereClause}
+        ORDER BY score DESC
+        LIMIT 10
+    `;
+    db.all(sql, [], (err, rows) => {
+        if (err) {
+            console.error('Error fetching leaderboard:', err.message);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
+});
+
+// Check if a score qualifies for top 10
+// Query param: ?score=N&type=alltime|weekly
+app.get('/leaderboard/qualifies', (req, res) => {
+    const score = parseInt(req.query.score, 10);
+    const type = req.query.type === 'weekly' ? 'weekly' : 'alltime';
+
+    if (isNaN(score)) return res.status(400).json({ error: 'Invalid score' });
+
+    let whereClause = '';
+    if (type === 'weekly') {
+        const weekAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
+        whereClause = `WHERE created_at >= ${weekAgo}`;
+    }
+
+    // Count how many scores are strictly higher
+    const sql = `SELECT COUNT(*) as count FROM scores ${whereClause} ${whereClause ? 'AND' : 'WHERE'} score > ?`;
+    db.get(sql, [score], (err, row) => {
+        if (err) {
+            console.error('Error checking qualification:', err.message);
+            return res.status(500).json({ error: err.message });
+        }
+        res.json({ qualifies: row.count < 10 });
+    });
+});
+
+// Submit a score
+app.post('/scores', (req, res) => {
+    const { nickname, score, word_count } = req.body;
+
+    if (!nickname || typeof score !== 'number' || typeof word_count !== 'number') {
+        return res.status(400).json({ error: 'Invalid payload' });
+    }
+
+    const cleanNickname = nickname.trim().slice(0, 20);
+    if (!cleanNickname) return res.status(400).json({ error: 'Nickname cannot be empty' });
+
+    const created_at = Math.floor(Date.now() / 1000);
+
+    db.run(
+        'INSERT INTO scores (nickname, score, word_count, created_at) VALUES (?, ?, ?, ?)',
+        [cleanNickname, score, word_count, created_at],
+        function (err) {
+            if (err) {
+                console.error('Error inserting score:', err.message);
+                return res.status(500).json({ error: err.message });
+            }
+            res.json({ id: this.lastID });
+        }
+    );
 });
