@@ -29,6 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
             this.countdownInterval = null;
             this.shuffleInterval = null;
             this.isGameOver = false;
+            this.isGameRunning = false;
             this.invalidWordSubmitted = false;
             this.messageTimeout = null;
 
@@ -177,6 +178,7 @@ document.addEventListener("DOMContentLoaded", () => {
             this.timerElement.textContent = "Time's up!";
             this.timerElement.style.color = "red";
             this.isGameOver = true;
+            this.isGameRunning = false;
             const btn = document.getElementById("pauseLeaderboard");
             btn.textContent = "🏆";
             btn.disabled = false;
@@ -329,7 +331,6 @@ document.addEventListener("DOMContentLoaded", () => {
             this.selectedTiles = [];
         }
 
-        // Returns { exists: bool } or { error: true, message: string }
         async validateWord(word) {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 15000);
@@ -424,7 +425,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const score = this.calculateTotalScore();
             if (score === 0) return;
 
-            // Check both alltime and weekly qualification in parallel
             const [alltime, weekly] = await Promise.all([
                 this.checkQualifies(score, 'alltime'),
                 this.checkQualifies(score, 'weekly')
@@ -492,7 +492,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         async openLeaderboard() {
             document.getElementById("leaderboardOverlay").classList.add("active");
-            // Default to alltime tab
             document.querySelectorAll(".lb-tab").forEach(t => t.classList.remove("active"));
             document.querySelector('.lb-tab[data-type="alltime"]').classList.add("active");
             await this.loadLeaderboard("alltime");
