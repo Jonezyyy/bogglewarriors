@@ -5,28 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Boggle Warriors</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="leaderboard.css">
 </head>
 <body>
-
     <div id="game">
         <div id="board-container">
             <div id="timer">1:30</div>
-            <!-- New text field to display selected letters -->
             <div id="selected-word">Get ready!</div>
             <div id="board"></div>
         </div>
-
         <div id="buttons">
             <button id="newGame">New</button>
-            <button id="pause">Pause</button>
+            <button id="pauseLeaderboard" disabled>🏆</button>
             <button id="submitWord">Submit</button>
         </div>
-
         <div id="sidebar">
-            
             <h3>Total Score: <span id="totalScore">0</span></h3>
-			<h3>Found Words</h3>
+            <h3>Found Words</h3>
             <ul id="foundWordsList"></ul>
+        </div>
+    </div>
+
+    <!-- Leaderboard modal -->
+    <div id="leaderboardOverlay" class="modal-overlay">
+        <div class="modal">
+            <button class="modal-close" id="leaderboardClose">✕</button>
+            <h2>🏆 Tulostaulukko</h2>
+            <div class="lb-tabs">
+                <button class="lb-tab active" data-type="alltime">Kaikkien aikojen</button>
+                <button class="lb-tab" data-type="weekly">Tämä viikko</button>
+            </div>
+            <ul id="leaderboardList"></ul>
+        </div>
+    </div>
+
+    <!-- Nickname modal -->
+    <div id="nicknameOverlay" class="modal-overlay">
+        <div class="modal">
+            <h2>🎉 Top 10!</h2>
+            <p>Hienoa tulosta! Anna nimimerkkisi tallentaaksesi tuloksesi.</p>
+            <input id="nicknameInput" type="text" maxlength="20" placeholder="Nimimerkki..." autocomplete="off" />
+            <div id="nicknameError"></div>
+            <div class="nickname-actions">
+                <button id="nicknameSubmit">Tallenna</button>
+                <button id="nicknameSkip">Ohita</button>
+            </div>
         </div>
     </div>
 
