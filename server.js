@@ -11,13 +11,11 @@ const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = path.resolve(process.env.DB_PATH || __dirname, 'words.db');
-console.log(`Database path: ${dbPath}`);
-
 app.use(cors());
 app.use(express.json());
 
 const dbPath = path.resolve(process.env.DB_PATH || __dirname, 'words.db');
+console.log(`Database path: ${dbPath}`);
 const db = new sqlite3.Database(dbPath, (err) => {
     if (err) {
         console.error('Error connecting to database:', err.message);
@@ -30,10 +28,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 function initializeDatabase() {
     db.serialize(() => {
         db.run('CREATE TABLE IF NOT EXISTS words (word TEXT PRIMARY KEY)', (err) => {
-            if (err) {
-                console.error('Error creating words table:', err.message);
-                return;
-            }
+            if (err) { console.error('Error creating words table:', err.message); return; }
 
             db.run(`CREATE TABLE IF NOT EXISTS scores (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -42,10 +37,7 @@ function initializeDatabase() {
                 word_count INTEGER NOT NULL,
                 created_at INTEGER NOT NULL
             )`, (err) => {
-                if (err) {
-                    console.error('Error creating scores table:', err.message);
-                    return;
-                }
+                if (err) { console.error('Error creating scores table:', err.message); return; }
 
                 db.get('SELECT COUNT(*) as count FROM words', (err, row) => {
                     if (err) { console.error(err.message); return; }
@@ -88,53 +80,33 @@ function startServer() {
     });
 }
 
-// Validate a word
 app.get('/validate-word/:word', (req, res) => {
     const word = req.params.word.toLowerCase();
     db.get('SELECT 1 FROM words WHERE word = ?', [word], (err, row) => {
-        if (err) {
-            console.error('Error querying database:', err.message);
-            return res.status(500).json({ error: err.message });
-        }
+        if (err) { return res.status(500).json({ error: err.message }); }
         res.json({ exists: !!row });
     });
 });
 
-// Fetch all words
 app.get('/words', (req, res) => {
     db.all('SELECT word FROM words', [], (err, rows) => {
-        if (err) {
-            console.error('Error fetching words:', err.message);
-            return res.status(500).json({ error: err.message });
-        }
+        if (err) { return res.status(500).json({ error: err.message }); }
         res.json(rows.map(row => row.word));
     });
 });
 
-// Add a word
 app.post('/words', (req, res) => {
     const { word } = req.body;
-
-    if (!word || typeof word !== 'string') {
-        return res.status(400).json({ error: 'Invalid payload' });
-    }
-
+    if (!word || typeof word !== 'string') { return res.status(400).json({ error: 'Invalid payload' }); }
     const cleanWord = word.trim().toLowerCase();
-    if (!cleanWord) return res.status(400).json({ error: 'Word cannot be empty' });
-
+    if (!cleanWord) { return res.status(400).json({ error: 'Word cannot be empty' }); }
     db.run('INSERT OR IGNORE INTO words (word) VALUES (?)', [cleanWord], function (err) {
-        if (err) {
-            console.error('Error inserting word:', err.message);
-            return res.status(500).json({ error: err.message });
-        }
-        if (this.changes === 0) {
-            return res.json({ added: false, message: 'Word already exists' });
-        }
+        if (err) { return res.status(500).json({ error: err.message }); }
+        if (this.changes === 0) { return res.json({ added: false, message: 'Word already exists' }); }
         res.json({ added: true, word: cleanWord });
     });
 });
 
-// Get top 10 leaderboard
 app.get('/leaderboard', (req, res) => {
     const type = req.query.type === 'weekly' ? 'weekly' : 'alltime';
     let whereClause = '';
@@ -142,66 +114,42 @@ app.get('/leaderboard', (req, res) => {
         const weekAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
         whereClause = `WHERE created_at >= ${weekAgo}`;
     }
-    const sql = `
-        SELECT id, nickname, score, word_count, created_at
-        FROM scores
-        ${whereClause}
-        ORDER BY score DESC
-        LIMIT 10
-    `;
+    const sql = `SELECT id, nickname, score, word_count, created_at FROM scores ${whereClause} ORDER BY score DESC LIMIT 10`;
     db.all(sql, [], (err, rows) => {
-        if (err) {
-            console.error('Error fetching leaderboard:', err.message);
-            return res.status(500).json({ error: err.message });
-        }
+        if (err) { return res.status(500).json({ error: err.message }); }
         res.json(rows);
     });
 });
 
-// Check if a score qualifies for top 10
 app.get('/leaderboard/qualifies', (req, res) => {
     const score = parseInt(req.query.score, 10);
     const type = req.query.type === 'weekly' ? 'weekly' : 'alltime';
-
-    if (isNaN(score)) return res.status(400).json({ error: 'Invalid score' });
-
+    if (isNaN(score)) { return res.status(400).json({ error: 'Invalid score' }); }
     let whereClause = '';
     if (type === 'weekly') {
         const weekAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
         whereClause = `WHERE created_at >= ${weekAgo}`;
     }
-
     const sql = `SELECT COUNT(*) as count FROM scores ${whereClause} ${whereClause ? 'AND' : 'WHERE'} score > ?`;
     db.get(sql, [score], (err, row) => {
-        if (err) {
-            console.error('Error checking qualification:', err.message);
-            return res.status(500).json({ error: err.message });
-        }
+        if (err) { return res.status(500).json({ error: err.message }); }
         res.json({ qualifies: row.count < 10 });
     });
 });
 
-// Submit a score
 app.post('/scores', (req, res) => {
     const { nickname, score, word_count } = req.body;
-
     if (!nickname || typeof score !== 'number' || typeof word_count !== 'number') {
         return res.status(400).json({ error: 'Invalid payload' });
     }
-
     const cleanNickname = nickname.trim().slice(0, 20);
-    if (!cleanNickname) return res.status(400).json({ error: 'Nickname cannot be empty' });
-
+    if (!cleanNickname) { return res.status(400).json({ error: 'Nickname cannot be empty' }); }
     const created_at = Math.floor(Date.now() / 1000);
-
     db.run(
         'INSERT INTO scores (nickname, score, word_count, created_at) VALUES (?, ?, ?, ?)',
         [cleanNickname, score, word_count, created_at],
         function (err) {
-            if (err) {
-                console.error('Error inserting score:', err.message);
-                return res.status(500).json({ error: err.message });
-            }
+            if (err) { return res.status(500).json({ error: err.message }); }
             res.json({ id: this.lastID });
         }
     );
