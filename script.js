@@ -1,6 +1,4 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const API_BASE = "https://bogglewarriors-production.up.railway.app";
-
     class BoggleGame {
         constructor() {
             this.initialLetters = ["B", "O", "G", "G", "L", "E", " ", " ", "W", "A", "R", "R", "I", "O", "R", "S"];
@@ -29,12 +27,8 @@ document.addEventListener("DOMContentLoaded", () => {
             this.countdownInterval = null;
             this.shuffleInterval = null;
             this.isGameOver = false;
-            this.isGameRunning = false;
             this.invalidWordSubmitted = false;
             this.messageTimeout = null;
-
-            // Leaderboard state
-            this.lastSubmittedId = null;
 
             // Initialize
             this.bindEvents();
@@ -46,37 +40,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
         bindEvents() {
             document.getElementById("newGame").addEventListener("click", () => this.startNewGame());
-            document.getElementById("pauseLeaderboard").addEventListener("click", () => this.handlePauseLeaderboard());
             document.getElementById("submitWord").addEventListener("click", () => this.submitWord());
-
-            // Leaderboard modal
-            document.getElementById("leaderboardClose").addEventListener("click", () => this.closeLeaderboard());
-            document.getElementById("leaderboardOverlay").addEventListener("click", (e) => {
-                if (e.target === document.getElementById("leaderboardOverlay")) this.closeLeaderboard();
-            });
-            document.querySelectorAll(".lb-tab").forEach(tab => {
-                tab.addEventListener("click", () => {
-                    document.querySelectorAll(".lb-tab").forEach(t => t.classList.remove("active"));
-                    tab.classList.add("active");
-                    this.loadLeaderboard(tab.dataset.type);
-                });
-            });
-
-            // Nickname modal
-            document.getElementById("nicknameSubmit").addEventListener("click", () => this.submitNickname());
-            document.getElementById("nicknameInput").addEventListener("keydown", (e) => {
-                if (e.key === "Enter") this.submitNickname();
-            });
-            document.getElementById("nicknameSkip").addEventListener("click", () => this.closeNicknameModal());
         }
 
         handleOutsideClick(event) {
             const isClickInsideGame = this.boardElement.contains(event.target) ||
                                       event.target.closest("#newGame") ||
-                                      event.target.closest("#pauseLeaderboard") ||
                                       event.target.closest("#submitWord") ||
-                                      event.target.closest("#leaderboardOverlay") ||
-                                      event.target.closest("#nicknameOverlay");
+                                      event.target.closest("#leaderboardBtn") ||
+                                      event.target.closest("#settingsBtn") ||
+                                      event.target.closest(".modal-overlay");
             if (!isClickInsideGame) {
                 this.resetSelectedTiles();
                 this.currentWord = [];
@@ -115,18 +88,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         resetGameState() {
-            const btn = document.getElementById("pauseLeaderboard");
-            btn.textContent = "🏆";
-            btn.disabled = true;
             this.timeLeft = 90;
             this.isPaused = false;
             this.isGameOver = false;
-            this.isGameRunning = false;
             this.invalidWordSubmitted = false;
             this.foundWords.clear();
             this.currentWord = [];
             this.selectedTiles = [];
-            this.lastSubmittedId = null;
             this.updateSidebar();
             this.timerElement.style.color = "";
             this.clearMessage();
@@ -146,11 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
         endCountdown() {
             clearInterval(this.countdownInterval);
             clearInterval(this.shuffleInterval);
-            const btn = document.getElementById("pauseLeaderboard");
-            btn.disabled = false;
-            btn.textContent = "Pause";
             this.timerElement.textContent = "1:30";
-            this.isGameRunning = true;
             this.shuffleBoard();
             this.startTimer();
         }
@@ -160,7 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
             this.timerInterval = setInterval(() => {
                 if (this.timeLeft <= 0) {
                     this.endGame();
-                } else if (!this.isPaused) {
+                } else {
                     this.updateTimer();
                 }
             }, 1000);
@@ -173,37 +137,16 @@ document.addEventListener("DOMContentLoaded", () => {
             this.timerElement.textContent = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
         }
 
-        async endGame() {
+        endGame() {
             clearInterval(this.timerInterval);
             this.timerElement.textContent = "Time's up!";
             this.timerElement.style.color = "red";
             this.isGameOver = true;
-            this.isGameRunning = false;
-            const btn = document.getElementById("pauseLeaderboard");
-            btn.textContent = "🏆";
-            btn.disabled = false;
             this.timeUpSound.play();
             this.setTimeUpBackground();
-            await this.checkAndPromptHighscore();
+            checkAndPromptScore(this.calculateTotalScore(), this.foundWords.size);
         }
 
-        handlePauseLeaderboard() {
-            if (this.isGameOver || !this.isGameRunning) {
-                this.openLeaderboard();
-            } else {
-                this.togglePause();
-            }
-        }
-
-        togglePause() {
-            if (this.isGameOver) return;
-            this.isPaused = !this.isPaused;
-            const btn = document.getElementById("pauseLeaderboard");
-            btn.textContent = this.isPaused ? "Resume" : "Pause";
-            this.boardElement.querySelectorAll(".tile").forEach(tile => {
-                tile.style.visibility = this.isPaused ? "hidden" : "visible";
-            });
-        }
 
         // ── Message helpers ───────────────────────────────────────────────
 
@@ -331,12 +274,13 @@ document.addEventListener("DOMContentLoaded", () => {
             this.selectedTiles = [];
         }
 
+        // Returns { exists: bool } or { error: true, message: string }
         async validateWord(word) {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 15000);
             try {
                 const response = await fetch(
-                    `${API_BASE}/validate-word/${word}`,
+                    `https://bogglewarriors-production.up.railway.app/validate-word/${word}`,
                     { signal: controller.signal }
                 );
                 if (!response.ok) return { error: true, message: `Server error: ${response.status}` };
@@ -353,12 +297,12 @@ document.addEventListener("DOMContentLoaded", () => {
         // ── Sidebar & scoring ─────────────────────────────────────────────
 
         updateSidebar() {
-            document.getElementById("totalScore").textContent = this.calculateTotalScore();
-            document.getElementById("foundWordsList").innerHTML =
-                Array.from(this.foundWords).reverse()
-                    .map(word => `<li>${word} - ${this.calculateScore(word)}</li>`)
-                    .join('');
-        }
+			document.getElementById("totalScore").textContent = this.calculateTotalScore();
+			document.getElementById("foundWordsList").innerHTML = 
+			Array.from(this.foundWords).reverse()
+				.map(word => `<li>${word} - ${this.calculateScore(word)}</li>`)
+				.join('');
+}
 
         calculateScore(word) {
             const l = word.length;
@@ -418,127 +362,174 @@ document.addEventListener("DOMContentLoaded", () => {
             if (type === "all" || type === "countdown") clearInterval(this.countdownInterval);
             if (type === "all" || type === "shuffle") clearInterval(this.shuffleInterval);
         }
+    }
 
-        // ── Highscore & leaderboard ───────────────────────────────────────
+    // ── Overlay logic ──────────────────────────────────────────────────────
 
-        async checkAndPromptHighscore() {
-            const score = this.calculateTotalScore();
-            if (score === 0) return;
+    const API = "https://bogglewarriors-production.up.railway.app";
 
-            const [alltime, weekly] = await Promise.all([
-                this.checkQualifies(score, 'alltime'),
-                this.checkQualifies(score, 'weekly')
-            ]);
+    function openOverlay(id) {
+        document.getElementById(id).classList.add("active");
+    }
+    function closeOverlay(id) {
+        document.getElementById(id).classList.remove("active");
+    }
 
-            if (alltime || weekly) {
-                this.openNicknameModal(score);
-            }
-        }
+    // ── Leaderboard ────────────────────────────────────────────────────────
 
-        async checkQualifies(score, type) {
-            try {
-                const res = await fetch(`${API_BASE}/leaderboard/qualifies?score=${score}&type=${type}`);
-                if (!res.ok) return false;
-                const data = await res.json();
-                return data.qualifies;
-            } catch {
-                return false;
-            }
-        }
+    let currentLbType = "alltime";
 
-        openNicknameModal(score) {
-            this._pendingScore = score;
-            document.getElementById("nicknameInput").value = "";
-            document.getElementById("nicknameError").textContent = "";
-            document.getElementById("nicknameOverlay").classList.add("active");
-            setTimeout(() => document.getElementById("nicknameInput").focus(), 100);
-        }
+    function formatLbDate(unixSeconds) {
+        const d = new Date(unixSeconds * 1000);
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const yesterday = new Date(today - 86400000);
+        const entry = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if (entry.getTime() === today.getTime()) return "Today";
+        if (entry.getTime() === yesterday.getTime()) return "Yesterday";
+        return d.toLocaleDateString("fi-FI");
+    }
 
-        closeNicknameModal() {
-            document.getElementById("nicknameOverlay").classList.remove("active");
-            this._pendingScore = null;
-        }
-
-        async submitNickname() {
-            const nickname = document.getElementById("nicknameInput").value.trim();
-            if (!nickname) {
-                document.getElementById("nicknameError").textContent = "Write your nickname";
+    async function fetchLeaderboard(type = "alltime") {
+        const list = document.getElementById("leaderboardList");
+        list.innerHTML = `<li class="lb-loading">Loading...</li>`;
+        try {
+            const res = await fetch(`${API}/leaderboard?type=${type}`);
+            if (!res.ok) throw new Error("Server error");
+            const rows = await res.json();
+            if (rows.length === 0) {
+                list.innerHTML = `<li class="lb-empty">No scores yet!</li>`;
                 return;
             }
-
-            const score = this._pendingScore;
-            const word_count = this.foundWords.size;
-
-            document.getElementById("nicknameSubmit").disabled = true;
-            document.getElementById("nicknameError").textContent = "";
-
-            try {
-                const res = await fetch(`${API_BASE}/scores`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ nickname, score, word_count })
-                });
-                if (!res.ok) throw new Error("Server error");
-                const data = await res.json();
-                this.lastSubmittedId = data.id;
-                this.closeNicknameModal();
-                this.openLeaderboard();
-            } catch {
-                document.getElementById("nicknameError").textContent = "Virhe tallennuksessa, yritä uudelleen";
-            } finally {
-                document.getElementById("nicknameSubmit").disabled = false;
-            }
-        }
-
-        async openLeaderboard() {
-            document.getElementById("leaderboardOverlay").classList.add("active");
-            document.querySelectorAll(".lb-tab").forEach(t => t.classList.remove("active"));
-            document.querySelector('.lb-tab[data-type="alltime"]').classList.add("active");
-            await this.loadLeaderboard("alltime");
-        }
-
-        closeLeaderboard() {
-            document.getElementById("leaderboardOverlay").classList.remove("active");
-            this.lastSubmittedId = null;
-        }
-
-        async loadLeaderboard(type) {
-            const listEl = document.getElementById("leaderboardList");
-            listEl.innerHTML = '<li class="lb-loading">Loading...</li>';
-
-            try {
-                const res = await fetch(`${API_BASE}/leaderboard?type=${type}`);
-                if (!res.ok) throw new Error("Server error");
-                const rows = await res.json();
-
-                if (rows.length === 0) {
-                    listEl.innerHTML = '<li class="lb-empty">No scores yet</li>';
-                    return;
-                }
-
-                const now = Math.floor(Date.now() / 1000);
-                listEl.innerHTML = rows.map((row, i) => {
-                    const daysAgo = Math.floor((now - row.created_at) / 86400);
-                    const whenText = daysAgo === 0 ? "Today" : daysAgo === 1 ? "yesterday" : `${daysAgo} days ago`;
-                    const isNew = this.lastSubmittedId !== null && row.id === this.lastSubmittedId;
-                    return `
-                        <li class="lb-row${isNew ? " lb-highlight" : ""}">
-                            <span class="lb-rank">${i + 1}.</span>
-                            <span class="lb-name">${this.escapeHtml(row.nickname)}</span>
-                            <span class="lb-score">${row.score} pts</span>
-                            <span class="lb-words">${row.word_count} words</span>
-                            <span class="lb-date">${whenText}</span>
-                        </li>`;
-                }).join('');
-            } catch {
-                listEl.innerHTML = '<li class="lb-error">Error when loading scores</li>';
-            }
-        }
-
-        escapeHtml(str) {
-            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+            list.innerHTML = rows.map((row, i) => {
+            const date = formatLbDate(row.created_at);
+                return `<li class="lb-row">
+                    <span class="lb-rank">${i + 1}</span>
+                    <span class="lb-name">${escapeHtml(row.nickname)}</span>
+                    <span class="lb-score">${row.score}p</span>
+                    <span class="lb-words">${row.word_count} words</span>
+                    <span class="lb-date">${date}</span>
+                </li>`;
+            }).join("");
+        } catch (e) {
+            list.innerHTML = `<li class="lb-error">Could not load leaderboard</li>`;
         }
     }
+
+    function escapeHtml(str) {
+        return str.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    document.getElementById("leaderboardBtn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        openOverlay("leaderboardOverlay");
+        fetchLeaderboard(currentLbType);
+    });
+    document.getElementById("leaderboardClose").addEventListener("click", () => {
+        closeOverlay("leaderboardOverlay");
+    });
+    document.getElementById("leaderboardOverlay").addEventListener("click", (e) => {
+        if (e.target === e.currentTarget) closeOverlay("leaderboardOverlay");
+    });
+
+    // Tab switching
+    document.querySelectorAll(".lb-tab").forEach(tab => {
+        tab.addEventListener("click", () => {
+            document.querySelectorAll(".lb-tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            currentLbType = tab.dataset.type;
+            fetchLeaderboard(currentLbType);
+        });
+    });
+
+    // ── Settings ───────────────────────────────────────────────────────────
+
+    document.getElementById("settingsBtn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        openOverlay("settingsOverlay");
+    });
+    document.getElementById("settingsClose").addEventListener("click", () => {
+        closeOverlay("settingsOverlay");
+    });
+    document.getElementById("settingsOverlay").addEventListener("click", (e) => {
+        if (e.target === e.currentTarget) closeOverlay("settingsOverlay");
+    });
+
+    document.querySelectorAll(".settings-options").forEach(group => {
+        group.querySelectorAll(".settings-option").forEach(btn => {
+            btn.addEventListener("click", () => {
+                group.querySelectorAll(".settings-option").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+            });
+        });
+    });
+
+    // ── Nickname / score submit ────────────────────────────────────────────
+
+    let pendingScore = null;
+
+    async function checkAndPromptScore(score, wordCount) {
+        if (score <= 0) return;
+        try {
+            // Check both alltime and weekly in parallel
+            const [resAll, resWeek] = await Promise.all([
+                fetch(`${API}/leaderboard/qualifies?score=${score}&type=alltime`),
+                fetch(`${API}/leaderboard/qualifies?score=${score}&type=weekly`)
+            ]);
+            const all = await resAll.json();
+            const week = await resWeek.json();
+            if (all.qualifies || week.qualifies) {
+                pendingScore = { score, wordCount };
+                document.getElementById("nicknameInput").value = "";
+                document.getElementById("nicknameError").textContent = "";
+                openOverlay("nicknameOverlay");
+            }
+        } catch (e) {
+            console.error("Could not check leaderboard qualification:", e);
+        }
+    }
+
+    async function submitScore(nickname) {
+        if (!pendingScore) return;
+        const { score, wordCount } = pendingScore;
+        try {
+            const res = await fetch(`${API}/scores`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nickname, score, word_count: wordCount })
+            });
+            if (!res.ok) throw new Error("Server error");
+            pendingScore = null;
+            closeOverlay("nicknameOverlay");
+        } catch (e) {
+            document.getElementById("nicknameError").textContent = "Could not save score, try again.";
+        }
+    }
+
+    document.getElementById("nicknameSubmit").addEventListener("click", () => {
+        const nickname = document.getElementById("nicknameInput").value.trim();
+        if (!nickname) {
+            document.getElementById("nicknameError").textContent = "Please enter a nickname.";
+            return;
+        }
+        submitScore(nickname);
+    });
+
+    document.getElementById("nicknameInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") document.getElementById("nicknameSubmit").click();
+    });
+
+    document.getElementById("nicknameSkip").addEventListener("click", () => {
+        pendingScore = null;
+        closeOverlay("nicknameOverlay");
+    });
+
+    document.getElementById("nicknameOverlay").addEventListener("click", (e) => {
+        if (e.target === e.currentTarget) {
+            pendingScore = null;
+            closeOverlay("nicknameOverlay");
+        }
+    });
 
     new BoggleGame();
 });
