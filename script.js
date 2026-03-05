@@ -462,7 +462,7 @@ document.addEventListener("DOMContentLoaded", () => {
         async submitNickname() {
             const nickname = document.getElementById("nicknameInput").value.trim();
             if (!nickname) {
-                document.getElementById("nicknameError").textContent = "Kirjoita nimimerkki";
+                document.getElementById("nicknameError").textContent = "Write your nickname";
                 return;
             }
 
@@ -504,7 +504,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         async loadLeaderboard(type) {
             const listEl = document.getElementById("leaderboardList");
-            listEl.innerHTML = '<li class="lb-loading">Ladataan...</li>';
+            listEl.innerHTML = '<li class="lb-loading">Loading...</li>';
 
             try {
                 const res = await fetch(`${API_BASE}/leaderboard?type=${type}`);
@@ -512,26 +512,26 @@ document.addEventListener("DOMContentLoaded", () => {
                 const rows = await res.json();
 
                 if (rows.length === 0) {
-                    listEl.innerHTML = '<li class="lb-empty">Ei tuloksia vielä</li>';
+                    listEl.innerHTML = '<li class="lb-empty">No scores yet</li>';
                     return;
                 }
 
                 const now = Math.floor(Date.now() / 1000);
                 listEl.innerHTML = rows.map((row, i) => {
                     const daysAgo = Math.floor((now - row.created_at) / 86400);
-                    const whenText = daysAgo === 0 ? "tänään" : daysAgo === 1 ? "eilen" : `${daysAgo} pv sitten`;
+                    const whenText = daysAgo === 0 ? "Today" : daysAgo === 1 ? "yesterday" : `${daysAgo} days ago`;
                     const isNew = this.lastSubmittedId !== null && row.id === this.lastSubmittedId;
                     return `
                         <li class="lb-row${isNew ? " lb-highlight" : ""}">
                             <span class="lb-rank">${i + 1}.</span>
                             <span class="lb-name">${this.escapeHtml(row.nickname)}</span>
                             <span class="lb-score">${row.score} pts</span>
-                            <span class="lb-words">${row.word_count} sanaa</span>
+                            <span class="lb-words">${row.word_count} words</span>
                             <span class="lb-date">${whenText}</span>
                         </li>`;
                 }).join('');
             } catch {
-                listEl.innerHTML = '<li class="lb-error">Virhe ladattaessa tuloksia</li>';
+                listEl.innerHTML = '<li class="lb-error">Error when loading scores</li>';
             }
         }
 

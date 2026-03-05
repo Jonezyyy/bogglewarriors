@@ -30,10 +30,10 @@
     <div id="leaderboardOverlay" class="modal-overlay">
         <div class="modal">
             <button class="modal-close" id="leaderboardClose">✕</button>
-            <h2>🏆 Tulostaulukko</h2>
+            <h2>🏆 Leaderboard</h2>
             <div class="lb-tabs">
-                <button class="lb-tab active" data-type="alltime">Kaikkien aikojen</button>
-                <button class="lb-tab" data-type="weekly">Tämä viikko</button>
+                <button class="lb-tab active" data-type="alltime">All time</button>
+                <button class="lb-tab" data-type="weekly">This week</button>
             </div>
             <ul id="leaderboardList"></ul>
         </div>
@@ -43,12 +43,12 @@
     <div id="nicknameOverlay" class="modal-overlay">
         <div class="modal">
             <h2>🎉 Top 10!</h2>
-            <p>Hienoa tulosta! Anna nimimerkkisi tallentaaksesi tuloksesi.</p>
-            <input id="nicknameInput" type="text" maxlength="20" placeholder="Nimimerkki..." autocomplete="off" />
+            <p>Great job! Save your score to the leaderboard</p>
+            <input id="nicknameInput" type="text" maxlength="20" placeholder="Nickname..." autocomplete="off" />
             <div id="nicknameError"></div>
             <div class="nickname-actions">
-                <button id="nicknameSubmit">Tallenna</button>
-                <button id="nicknameSkip">Ohita</button>
+                <button id="nicknameSubmit">Save</button>
+                <button id="nicknameSkip">Skip</button>
             </div>
         </div>
     </div>
