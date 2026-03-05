@@ -58,7 +58,7 @@ function initializeDatabase() {
                     console.log('Loading words from CSV...');
                     const words = readFileSync(csvPath, 'utf8')
                         .split('\n')
-                        .map(w => w.trim())
+                        .map(w => w.replace(/[\t\r\n]/g, '').trim())
                         .filter(Boolean);
 
                     const stmt = db.prepare('INSERT OR IGNORE INTO words (word) VALUES (?)');
