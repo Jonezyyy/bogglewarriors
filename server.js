@@ -11,6 +11,9 @@ const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const dbPath = path.resolve(process.env.DB_PATH || __dirname, 'words.db');
+console.log(`Database path: ${dbPath}`);
+
 app.use(cors());
 app.use(express.json());
 
