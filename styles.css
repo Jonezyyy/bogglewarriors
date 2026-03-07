@@ -1,8 +1,8 @@
 /* ─── CSS Custom Properties ─────────────────────────────────────────────── */
 :root {
-    --tile-size: 80px;
+    --tile-size: 70px;
     --tile-font: 42px;
-    --gap: 10px;
+    --gap: 15px;
     --board-size: calc(4 * var(--tile-size) + 3 * var(--gap));
 }
 
@@ -19,11 +19,129 @@ body {
     overflow-x: hidden;
 }
 
+/* ─── Top Bar ────────────────────────────────────────────────────────────── */
+#top-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    z-index: 100;
+    pointer-events: none;
+}
+
+/* ─── Icon Buttons ───────────────────────────────────────────────────────── */
+.icon-btn {
+    pointer-events: all;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    /* override global button styles */
+    min-width: unset;
+    font-size: unset;
+    font-weight: unset;
+    background-image: none;
+    box-shadow: none;
+    text-shadow: none;
+    transition: background 0.2s, transform 0.15s;
+}
+
+.icon-btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.icon-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    background-image: none;
+    transform: scale(1.08);
+}
+
+.icon-btn:active {
+    background: rgba(255, 255, 255, 0.35);
+    background-image: none;
+    transform: scale(0.95);
+    box-shadow: none;
+}
+
+/* ─── Settings overlay ───────────────────────────────────────────────────── */
+.settings-group {
+    margin-bottom: 22px;
+}
+
+.settings-label {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 10px;
+}
+
+.settings-options {
+    display: flex;
+    gap: 10px;
+}
+
+.settings-option {
+    flex: 1;
+    height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.07);
+    background-image: none;
+    box-shadow: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, border-color 0.2s;
+    padding: 0;
+    min-width: unset;
+    white-space: nowrap;
+    text-shadow: none;
+}
+
+.settings-option:hover {
+    background: rgba(255, 255, 255, 0.15);
+    background-image: none;
+    box-shadow: none;
+    color: white;
+}
+
+.settings-option:active {
+    transform: none;
+    box-shadow: none;
+}
+
+.settings-option.active {
+    background: rgba(255, 255, 255, 0.22);
+    background-image: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    color: white;
+    box-shadow: none;
+}
+
 /* ─── Game Layout ────────────────────────────────────────────────────────── */
 #game {
     display: flex;
     justify-content: center;
-    padding-top: 20px;
+    padding-top: 88px;
     margin: 0 auto;
     width: 90%;
     max-width: 600px;
@@ -43,19 +161,24 @@ body {
 
 /* ─── Timer ──────────────────────────────────────────────────────────────── */
 #timer {
-    margin-top: 0px;
-    font-size: 40px;
+    font-size: 32px;
     font-weight: bold;
     color: white;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    pointer-events: none;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 /* ─── Selected Word Display ──────────────────────────────────────────────── */
 #selected-word {
     height: 40px;
-    font-size: 20px;
+    font-size: 24px;
     font-weight: bold;
     color: white;
-    margin-top: 15px;
+	text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    margin-top: 0px;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -70,7 +193,7 @@ body {
     grid-template-rows: repeat(4, var(--tile-size));
     gap: var(--gap);
     margin-top: 10px;
-    margin-bottom: 20px;
+    margin-bottom: 10px;
 }
 
 /* ─── Tiles ──────────────────────────────────────────────────────────────── */
@@ -83,19 +206,47 @@ body {
     font-size: var(--tile-font);
     color: white;
     font-weight: bold;
-    background-image: url("images/tile.png");
-    background-size: cover;
-    background-position: center;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
     touch-action: manipulation;
+
+    /* 3D glossy orange — bright */
+    background-color: #ff9f0a;
+    background-image:
+        linear-gradient(180deg,
+            rgba(255,255,255,0.50) 0%,
+            rgba(255,255,255,0.18) 45%,
+            rgba(0,0,0,0.02) 55%,
+            rgba(0,0,0,0.12) 100%);
+    box-shadow:
+        0 6px 0 #b85e00,
+        0 8px 10px rgba(0,0,0,0.35);
+    text-shadow: 0 -1px 2px rgba(0,0,0,0.3);
+    transition: transform 0.08s, box-shadow 0.08s;
+}
+
+.tile:active {
+    transform: translateY(4px);
+    box-shadow:
+        0 2px 0 #b8720a,
+        0 3px 6px rgba(0,0,0,0.3);
 }
 
 .tile.selected {
-    background-image: url("images/tile_selected.png");
+    background-color: #d06800;
+    background-image:
+        linear-gradient(180deg,
+            rgba(255,255,255,0.08) 0%,
+            rgba(0,0,0,0.05) 45%,
+            rgba(0,0,0,0.15) 55%,
+            rgba(0,0,0,0.28) 100%);
+    box-shadow:
+        0 2px 0 #7a3d00,
+        0 3px 6px rgba(0,0,0,0.4);
+    transform: translateY(4px);
 }
 
 /* ─── Shake Animation ────────────────────────────────────────────────────── */
@@ -125,34 +276,55 @@ body {
     display: flex;
     gap: 10px;
     margin-top: 20px;
-    flex-wrap: wrap;
     justify-content: center;
+    align-items: center;
 }
 
 button {
-    height: 80px;
-    padding: 0 20px;
-    font-size: 24px;
     cursor: pointer;
     border: none;
-    border-radius: 15px;
-    background-image: url("images/button_texture.png");
-    background-size: cover;
     color: white;
     font-weight: bold;
-    min-width: 100px;
     white-space: nowrap;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
+    background: none;
+    padding: 0;
 }
 
-button:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+/* Play & Submit — 3D glossy blue */
+#newGame, #submitWord {
+    height: 80px;
+    padding: 0 20px;
+    font-size: 24px;
+    border-radius: 14px;
+    background-color: #2e86de;
+    background-image:
+        linear-gradient(180deg,
+            rgba(255,255,255,0.35) 0%,
+            rgba(255,255,255,0.10) 45%,
+            rgba(0,0,0,0.05) 55%,
+            rgba(0,0,0,0.18) 100%);
+    box-shadow:
+        0 6px 0 #1a5fa8,
+        0 8px 10px rgba(0,0,0,0.35);
+    text-shadow: 0 -1px 2px rgba(0,0,0,0.3);
+    transition: transform 0.08s, box-shadow 0.08s;
 }
 
-button:active {
-    background-color: rgba(255, 255, 255, 0.3);
+#newGame:hover, #submitWord:hover {
+    background-color: #4a9ade;
 }
+
+#newGame:active, #submitWord:active {
+    transform: translateY(4px);
+    box-shadow:
+        0 2px 0 #1a5fa8,
+        0 3px 6px rgba(0,0,0,0.3);
+}
+
+#newGame    { width: 110px; font-size: 26px; }
+#submitWord { width: 220px; font-size: 26px; }
 
 /* ─── Sidebar ────────────────────────────────────────────────────────────── */
 #sidebar {
@@ -160,14 +332,13 @@ button:active {
     color: white;
     font-size: 18px;
     text-align: center;
-    margin-top: 10px;
-
+    margin-top: 25px;
+}
 
 #sidebar h3, #sidebar h4 {
     margin: 0;
     position: sticky;
     top: 0;
-    background-color: rgba(0, 0, 0, 0.3);
     padding: 4px 0;
 }
 
@@ -178,6 +349,7 @@ button:active {
     color: white;
     max-height: 200px;
     overflow-y: auto;
+    margin-top: 10px;
 }
 
 #sidebar li {
@@ -189,15 +361,15 @@ button:active {
     :root {
         --tile-size: 68px;
         --tile-font: 34px;
-        --gap: 8px;
+        --gap: 15px;
     }
 
     #timer {
-        font-size: 32px;
+        font-size: 28px;
     }
 
     #selected-word {
-        font-size: 17px;
+        font-size: 24px;
         height: 34px;
     }
 
@@ -205,8 +377,10 @@ button:active {
         height: 64px;
         font-size: 20px;
         padding: 0 14px;
-        min-width: 80px;
     }
+
+    #newGame    { width: 100px;  font-size: 28px; }
+    #submitWord { width: 207px; font-size: 28px; }
 
     #sidebar {
         font-size: 16px;
@@ -216,15 +390,10 @@ button:active {
 
 /* ─── Small Mobile (max 400px) ───────────────────────────────────────────── */
 @media (max-width: 400px) {
-    :root {
-        --tile-size: 56px;
-        --tile-font: 28px;
-        --gap: 7px;
-    }
-
-    #game {
-        width: 96%;
-        padding-top: 10px;
+   :root {
+        --tile-size: 68px;
+        --tile-font: 34px;
+        --gap: 15px;
     }
 
     #timer {
@@ -232,26 +401,50 @@ button:active {
     }
 
     #selected-word {
-        font-size: 15px;
-        height: 30px;
-        margin-top: 8px;
+        font-size: 24px;
+        height: 34px;
     }
 
     button {
-        height: 56px;
-        font-size: 17px;
-        padding: 0 10px;
-        min-width: 70px;
+        height: 64px;
+        font-size: 20px;
+        padding: 0 14px;
     }
 
-    #buttons {
-        gap: 7px;
-        margin-top: 14px;
-    }
+    #newGame    { width: 100px;  font-size: 28px; }
+    #submitWord { width: 207px; font-size: 28px; }
 
     #sidebar {
-        font-size: 14px;
-        max-height: 150px;
+        font-size: 16px;
+        max-height: 180px;
+    }
+}:root {
+        --tile-size: 68px;
+        --tile-font: 34px;
+        --gap: 15px;
+    }
+
+    #timer {
+        font-size: 28px;
+    }
+
+    #selected-word {
+        font-size: 24px;
+        height: 34px;
+    }
+
+    button {
+        height: 64px;
+        font-size: 20px;
+        padding: 0 14px;
+    }
+
+    #newGame    { width: 100px;  font-size: 28px; }
+    #submitWord { width: 207px; font-size: 28px; }
+
+    #sidebar {
+        font-size: 16px;
+        max-height: 180px;
     }
 }
 
@@ -277,7 +470,7 @@ button:active {
     }
 
     #timer {
-        font-size: 24px;
+        font-size: 22px;
     }
 
     #selected-word {
@@ -301,7 +494,7 @@ button:active {
     #sidebar {
         width: 160px;
         max-height: 260px;
-        margin-top: 0;
+        margin-top: 5px;
         font-size: 13px;
         text-align: left;
         padding-left: 8px;

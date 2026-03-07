@@ -8,15 +8,37 @@
     <link rel="stylesheet" href="leaderboard.css">
 </head>
 <body>
+
+    <!-- Top bar -->
+    <div id="top-bar">
+        <button id="leaderboardBtn" class="icon-btn" aria-label="Leaderboard">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 9H4a2 2 0 0 1-2-2V5h4"/>
+                <path d="M18 9h2a2 2 0 0 0 2-2V5h-4"/>
+                <path d="M6 5h12v6a6 6 0 0 1-12 0V5z"/>
+                <path d="M12 17v4"/>
+                <path d="M8 21h8"/>
+            </svg>
+        </button>
+        <button id="settingsBtn" class="icon-btn" aria-label="Settings">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+        </button>
+        <div id="timer">1:30</div>
+    </div>
+
+    <!-- Main game -->
     <div id="game">
         <div id="board-container">
-            <div id="timer">1:30</div>
             <div id="selected-word">Get ready!</div>
             <div id="board"></div>
         </div>
         <div id="buttons">
             <button id="newGame">New</button>
-            <button id="pauseLeaderboard">🏆</button>
             <button id="submitWord">Submit</button>
         </div>
         <div id="sidebar">
@@ -29,11 +51,11 @@
     <!-- Leaderboard modal -->
     <div id="leaderboardOverlay" class="modal-overlay">
         <div class="modal">
-            <button class="modal-close" id="leaderboardClose">✕</button>
-            <h2>🏆 Leaderboard</h2>
+            <button class="modal-close" id="leaderboardClose">&#10005;</button>
+            <h2>&#127942; Leaderboard</h2>
             <div class="lb-tabs">
-                <button class="lb-tab active" data-type="alltime">All time</button>
-                <button class="lb-tab" data-type="weekly">This week</button>
+                <button class="lb-tab active" data-type="daily">Today</button>
+                <button class="lb-tab" data-type="alltime">All time</button>
             </div>
             <ul id="leaderboardList"></ul>
         </div>
@@ -42,13 +64,35 @@
     <!-- Nickname modal -->
     <div id="nicknameOverlay" class="modal-overlay">
         <div class="modal">
-            <h2>🎉 Top 10!</h2>
+            <h2>&#127881; Top 10!</h2>
             <p>Great job! Save your score to the leaderboard</p>
             <input id="nicknameInput" type="text" maxlength="20" placeholder="Nickname..." autocomplete="off" />
             <div id="nicknameError"></div>
             <div class="nickname-actions">
                 <button id="nicknameSubmit">Save</button>
                 <button id="nicknameSkip">Skip</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings overlay -->
+    <div id="settingsOverlay" class="modal-overlay">
+        <div class="modal">
+            <button class="modal-close" id="settingsClose">&#10005;</button>
+            <h2>&#9881;&#65039; Settings</h2>
+            <div class="settings-group">
+                <label class="settings-label">Group Mode</label>
+                <div class="settings-options">
+                    <button class="settings-option active" data-group="solo">Solo</button>
+                    <button class="settings-option" data-group="team">Team</button>
+                </div>
+            </div>
+            <div class="settings-group">
+                <label class="settings-label">Language</label>
+                <div class="settings-options">
+                    <button class="settings-option active" data-lang="fi">&#127467;&#127470; Finnish</button>
+                    <button class="settings-option" data-lang="en">&#127468;&#127463; English</button>
+                </div>
             </div>
         </div>
     </div>
