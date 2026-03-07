@@ -117,8 +117,13 @@ app.get('/leaderboard', (req, res) => {
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
         whereClause = `WHERE created_at >= ${startOfDay}`;
     }
-    const sql = `SELECT id, nickname, score, word_count, created_at FROM scores ${whereClause} ORDER BY score DESC LIMIT 10`;
-    db.all(sql, [], (err, rows) => {
+    // Use parameterized query instead of string interpolation
+const sql = type === 'daily' 
+  ? `SELECT id, nickname, score, word_count, created_at FROM scores WHERE created_at >= ? ORDER BY score DESC LIMIT 10`
+  : `SELECT id, nickname, score, word_count, created_at FROM scores ORDER BY score DESC LIMIT 10`;
+
+const params = type === 'daily' ? [startOfDay] : [];
+db.all(sql, params, (err, rows) => {
         if (err) { return res.status(500).json({ error: err.message }); }
         res.json(rows);
     });
