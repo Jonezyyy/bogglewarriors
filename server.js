@@ -110,11 +110,12 @@ app.post('/words', (req, res) => {
 });
 
 app.get('/leaderboard', (req, res) => {
-    const type = req.query.type === 'weekly' ? 'weekly' : 'alltime';
+    const type = req.query.type === 'daily' ? 'daily' : 'alltime';
     let whereClause = '';
-    if (type === 'weekly') {
-        const weekAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
-        whereClause = `WHERE created_at >= ${weekAgo}`;
+    if (type === 'daily') {
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+        whereClause = `WHERE created_at >= ${startOfDay}`;
     }
     const sql = `SELECT id, nickname, score, word_count, created_at FROM scores ${whereClause} ORDER BY score DESC LIMIT 10`;
     db.all(sql, [], (err, rows) => {
@@ -125,12 +126,13 @@ app.get('/leaderboard', (req, res) => {
 
 app.get('/leaderboard/qualifies', (req, res) => {
     const score = parseInt(req.query.score, 10);
-    const type = req.query.type === 'weekly' ? 'weekly' : 'alltime';
+    const type = req.query.type === 'daily' ? 'daily' : 'alltime';
     if (isNaN(score)) { return res.status(400).json({ error: 'Invalid score' }); }
     let whereClause = '';
-    if (type === 'weekly') {
-        const weekAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
-        whereClause = `WHERE created_at >= ${weekAgo}`;
+    if (type === 'daily') {
+        const now = new Date();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+        whereClause = `WHERE created_at >= ${startOfDay}`;
     }
     const sql = `SELECT COUNT(*) as count FROM scores ${whereClause} ${whereClause ? 'AND' : 'WHERE'} score > ?`;
     db.get(sql, [score], (err, row) => {
