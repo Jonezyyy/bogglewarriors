@@ -237,7 +237,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const word = this.currentWord.join("");
 
             if (word.length < 3) {
-                this.showMessage("Liian lyhyt — vähintään 3 kirjainta", "#ff9900", 2000);
+                this.showMessage("Too short — at least 3 letters", "#ff9900", 2000);
                 this.incorrectAnswerSound.play();
                 this.resetSelectedTiles();
                 this.currentWord = [];
@@ -246,7 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (this.foundWords.has(word)) {
-                this.showMessage("Sana jo löydetty!", "#ff9900", 2000);
+                this.showMessage("Word already found!", "#ff9900", 2000);
                 this.incorrectAnswerSound.play();
                 this.resetSelectedTiles();
                 this.currentWord = [];
@@ -254,12 +254,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            this.showMessage("Tarkistetaan...", "#aaaaaa");
+            this.showMessage("Validating...", "#aaaaaa");
 
             const result = await this.validateWord(word);
 
             if (result.error) {
-                this.showMessage("Servu ei vastaa", "#ff4444", 3000);
+                this.showMessage("Server is not responding", "#ff4444", 3000);
                 this.incorrectAnswerSound.play();
                 this.invalidWordSubmitted = true;
             } else if (result.exists) {
@@ -269,7 +269,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 this.clearMessage();
                 this.invalidWordSubmitted = false;
             } else {
-                this.showMessage(`"${word}" ei ole kelvollinen sana`, "#ff4444", 2000);
+                this.showMessage(`"${word}" is not a word`, "#ff4444", 2000);
                 this.incorrectAnswerSound.play();
                 this.invalidWordSubmitted = true;
             }
