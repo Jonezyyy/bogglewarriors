@@ -91,6 +91,7 @@ app.get('/validate-word/:word', (req, res) => {
         // Use Free Dictionary API for English
         fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`)
             .then(response => {
+                console.log(`Dictionary API [${word}]: status ${response.status}`);
                 // 404 = word not found, 200 = valid word
                 if (!response.ok) {
                     res.json({ exists: false });
@@ -99,16 +100,17 @@ app.get('/validate-word/:word', (req, res) => {
                 return response.json();
             })
             .then(data => {
-                if (!data) return; // Already sent 404 response
+                if (data === null) return; // Already sent 404 response
                 // Valid entries have array of definitions with "meanings" field
-                const exists = Array.isArray(data) && data.length > 0 && data[0].meanings !== undefined;
-                res.json({ exists });
+                const hasDefinitions = Array.isArray(data) && data.length > 0 && data[0].meanings;
+                console.log(`Dictionary API [${word}]: has definitions = ${!!hasDefinitions}`);
+                res.json({ exists: !!hasDefinitions });
             })
             .catch(error => {
-                console.error('Dictionary API error:', error);
+                console.error(`Dictionary API error [${word}]:`, error.message);
                 res.json({ exists: false });
             });
-    }
+    } else {
         // Use database for Finnish
         db.get('SELECT 1 FROM words WHERE word = ?', [word], (err, row) => {
             if (err) { return res.status(500).json({ error: err.message }); }

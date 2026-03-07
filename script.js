@@ -81,10 +81,12 @@ document.addEventListener("DOMContentLoaded", () => {
             this.resetBackground();
             this.resetGameState();
 
-            this.showMessage("Yhdistetään...", "#aaaaaa");
-            const result = await this.validateWord("home");
+            this.showMessage("Connecting...", "#aaaaaa");
+            // Use a universal test word that exists in both languages
+            const testWord = currentLanguage === 'en' ? 'cat' : 'kissa';
+            const result = await this.validateWord(testWord);
             if (result.error) {
-                this.showMessage("Servu ei vastaa", "#ff4444");
+                this.showMessage("Server not responding", "#ff4444");
                 return;
             }
 
