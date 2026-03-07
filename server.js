@@ -154,9 +154,14 @@ app.get('/leaderboard', (req, res) => {
         params = [lang];
     }
 
+    console.log(`Leaderboard query [${type}, ${lang}]:`, sql, params);
     db.all(sql, params, (err, rows) => {
-        if (err) { return res.status(500).json({ error: err.message }); }
-        res.json(rows);
+        if (err) { 
+            console.error(`Leaderboard error [${type}, ${lang}]:`, err);
+            return res.status(500).json({ error: err.message }); 
+        }
+        console.log(`Leaderboard result [${type}, ${lang}]: ${rows?.length || 0} rows`);
+        res.json(rows || []);
     });
 });
 
