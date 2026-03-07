@@ -40,39 +40,57 @@ function initializeDatabase() {
             )`, (err) => {
                 if (err) { console.error('Error creating scores table:', err.message); return; }
 
-                db.get('SELECT COUNT(*) as count FROM words', (err, row) => {
-                    if (err) { console.error(err.message); return; }
-
-                    if (row.count > 0) {
-                        console.log(`Database already contains ${row.count} words.`);
-                        startServer();
-                        return;
+                // Ensure language column exists (for backward compatibility)
+                db.all("PRAGMA table_info(scores)", [], (err, columns) => {
+                    if (err) { console.error('Error checking scores schema:', err.message); return; }
+                    const hasLanguageColumn = columns.some(col => col.name === 'language');
+                    if (!hasLanguageColumn) {
+                        console.log('Adding language column to scores table...');
+                        db.run("ALTER TABLE scores ADD COLUMN language TEXT DEFAULT 'fi'", (err) => {
+                            if (err) { console.error('Error adding language column:', err.message); }
+                            else { console.log('Language column added successfully'); }
+                            checkAndLoadWords();
+                        });
+                    } else {
+                        checkAndLoadWords();
                     }
-
-                    const csvPath = path.resolve(__dirname, 'finnish_words.csv');
-                    if (!existsSync(csvPath)) {
-                        console.error('finnish_words.csv not found!');
-                        startServer();
-                        return;
-                    }
-
-                    console.log('Loading words from CSV...');
-                    const words = readFileSync(csvPath, 'utf8')
-                        .split('\n')
-                        .slice(1)
-                        .map(line => line.split('\t')[0].trim())
-                        .filter(w => w && !w.includes(' '))
-                        .map(w => w.toLowerCase());
-
-                    const stmt = db.prepare('INSERT OR IGNORE INTO words (word) VALUES (?)');
-                    words.forEach(word => stmt.run(word));
-                    stmt.finalize((err) => {
-                        if (err) { console.error('Error inserting words:', err.message); }
-                        else { console.log(`Loaded ${words.length} words into database.`); }
-                        startServer();
-                    });
                 });
             });
+        });
+    });
+}
+
+function checkAndLoadWords() {
+    db.get('SELECT COUNT(*) as count FROM words', (err, row) => {
+        if (err) { console.error(err.message); return; }
+
+        if (row.count > 0) {
+            console.log(`Database already contains ${row.count} words.`);
+            startServer();
+            return;
+        }
+
+        const csvPath = path.resolve(__dirname, 'finnish_words.csv');
+        if (!existsSync(csvPath)) {
+            console.error('finnish_words.csv not found!');
+            startServer();
+            return;
+        }
+
+        console.log('Loading words from CSV...');
+        const words = readFileSync(csvPath, 'utf8')
+            .split('\n')
+            .slice(1)
+            .map(line => line.split('\t')[0].trim())
+            .filter(w => w && !w.includes(' '))
+            .map(w => w.toLowerCase());
+
+        const stmt = db.prepare('INSERT OR IGNORE INTO words (word) VALUES (?)');
+        words.forEach(word => stmt.run(word));
+        stmt.finalize((err) => {
+            if (err) { console.error('Error inserting words:', err.message); }
+            else { console.log(`Loaded ${words.length} words into database.`); }
+            startServer();
         });
     });
 }
