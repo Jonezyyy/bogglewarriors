@@ -7,6 +7,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU",
                 "AJTOTO", "EITOSS", "ELYTTR", "AKITMV", "AILKVY", "ALRNNU"
             ];
+            this.englishDice = [
+                "AAEEGN", "ABBJOO", "ACHOPS", "AFFKPS", "AOOTTW",
+                "CIMOTU", "DEILRX", "DELRUY", "DISTTY", "EGINXU",
+                "EGKLUY", "EHMUNRS", "ENSSSU", "FIPRSY", "GORRVW", "AFFKPS"
+            ];
 
             // DOM elements
             this.boardElement = document.getElementById("board");
@@ -77,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
             this.resetGameState();
 
             this.showMessage("Yhdistetään...", "#aaaaaa");
-            const result = await this.validateWord("testi");
+            const result = await this.validateWord("home");
             if (result.error) {
                 this.showMessage("Servu ei vastaa", "#ff4444");
                 return;
@@ -278,7 +283,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const timeout = setTimeout(() => controller.abort(), 15000);
             try {
                 const response = await fetch(
-                    `https://bogglewarriors-production.up.railway.app/validate-word/${word}`,
+                    `https://bogglewarriors-production.up.railway.app/validate-word/${word}?lang=${currentLanguage}`,
                     { signal: controller.signal }
                 );
                 if (!response.ok) return { error: true, message: `Server error: ${response.status}` };
@@ -328,7 +333,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         randomizeDice() {
-            const dice = [...this.finnishDice];
+            const diceSet = currentLanguage === 'en' ? this.englishDice : this.finnishDice;
+            const dice = [...diceSet];
             for (let i = dice.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [dice[i], dice[j]] = [dice[j], dice[i]];
@@ -376,6 +382,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ── Leaderboard ────────────────────────────────────────────────────────
 
     let currentLbType = "daily";
+    let currentLanguage = "fi";
 
     function formatLbDate(unixSeconds) {
         const d = new Date(unixSeconds * 1000);
@@ -392,7 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const list = document.getElementById("leaderboardList");
         list.innerHTML = `<li class="lb-loading">Loading...</li>`;
         try {
-            const res = await fetch(`${API}/leaderboard?type=${type}`);
+            const res = await fetch(`${API}/leaderboard?type=${type}&lang=${currentLanguage}`);
             if (!res.ok) throw new Error("Server error");
             const rows = await res.json();
             if (rows.length === 0) {
@@ -458,6 +465,11 @@ document.addEventListener("DOMContentLoaded", () => {
             btn.addEventListener("click", () => {
                 group.querySelectorAll(".settings-option").forEach(b => b.classList.remove("active"));
                 btn.classList.add("active");
+
+                // Update language if this is the language group
+                if (btn.dataset.lang) {
+                    currentLanguage = btn.dataset.lang;
+                }
             });
         });
     });
@@ -471,8 +483,8 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
             // Check both alltime and weekly in parallel
             const [resAll, resDay] = await Promise.all([
-                fetch(`${API}/leaderboard/qualifies?score=${score}&type=alltime`),
-                fetch(`${API}/leaderboard/qualifies?score=${score}&type=daily`)
+                fetch(`${API}/leaderboard/qualifies?score=${score}&type=alltime&lang=${currentLanguage}`),
+                fetch(`${API}/leaderboard/qualifies?score=${score}&type=daily&lang=${currentLanguage}`)
             ]);
             const all = await resAll.json();
             const day = await resDay.json();
@@ -494,7 +506,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(`${API}/scores`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nickname, score, word_count: wordCount })
+                body: JSON.stringify({ nickname, score, word_count: wordCount, language: currentLanguage })
             });
             if (!res.ok) throw new Error("Server error");
             pendingScore = null;

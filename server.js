@@ -35,6 +35,7 @@ function initializeDatabase() {
                 nickname TEXT NOT NULL,
                 score INTEGER NOT NULL,
                 word_count INTEGER NOT NULL,
+                language TEXT NOT NULL DEFAULT 'fi',
                 created_at INTEGER NOT NULL
             )`, (err) => {
                 if (err) { console.error('Error creating scores table:', err.message); return; }
@@ -84,10 +85,36 @@ function startServer() {
 
 app.get('/validate-word/:word', (req, res) => {
     const word = req.params.word.toLowerCase();
-    db.get('SELECT 1 FROM words WHERE word = ?', [word], (err, row) => {
-        if (err) { return res.status(500).json({ error: err.message }); }
-        res.json({ exists: !!row });
-    });
+    const lang = req.query.lang || 'fi';
+
+    if (lang === 'en') {
+        // Use Free Dictionary API for English
+        fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`)
+            .then(response => {
+                // 404 = word not found, 200 = valid word
+                if (!response.ok) {
+                    res.json({ exists: false });
+                    return null;
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return; // Already sent 404 response
+                // Valid entries have array of definitions with "meanings" field
+                const exists = Array.isArray(data) && data.length > 0 && data[0].meanings !== undefined;
+                res.json({ exists });
+            })
+            .catch(error => {
+                console.error('Dictionary API error:', error);
+                res.json({ exists: false });
+            });
+    }
+        // Use database for Finnish
+        db.get('SELECT 1 FROM words WHERE word = ?', [word], (err, row) => {
+            if (err) { return res.status(500).json({ error: err.message }); }
+            res.json({ exists: !!row });
+        });
+    }
 });
 
 app.get('/words', (req, res) => {
@@ -111,19 +138,21 @@ app.post('/words', (req, res) => {
 
 app.get('/leaderboard', (req, res) => {
     const type = req.query.type === 'daily' ? 'daily' : 'alltime';
-    let whereClause = '';
+    const lang = req.query.lang || 'fi';
+
+    let sql, params;
+
     if (type === 'daily') {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
-        whereClause = `WHERE created_at >= ${startOfDay}`;
+        sql = `SELECT id, nickname, score, word_count, created_at FROM scores WHERE language = ? AND created_at >= ? ORDER BY score DESC LIMIT 10`;
+        params = [lang, startOfDay];
+    } else {
+        sql = `SELECT id, nickname, score, word_count, created_at FROM scores WHERE language = ? ORDER BY score DESC LIMIT 10`;
+        params = [lang];
     }
-    // Use parameterized query instead of string interpolation
-const sql = type === 'daily' 
-  ? `SELECT id, nickname, score, word_count, created_at FROM scores WHERE created_at >= ? ORDER BY score DESC LIMIT 10`
-  : `SELECT id, nickname, score, word_count, created_at FROM scores ORDER BY score DESC LIMIT 10`;
 
-const params = type === 'daily' ? [startOfDay] : [];
-db.all(sql, params, (err, rows) => {
+    db.all(sql, params, (err, rows) => {
         if (err) { return res.status(500).json({ error: err.message }); }
         res.json(rows);
     });
@@ -132,31 +161,42 @@ db.all(sql, params, (err, rows) => {
 app.get('/leaderboard/qualifies', (req, res) => {
     const score = parseInt(req.query.score, 10);
     const type = req.query.type === 'daily' ? 'daily' : 'alltime';
+    const lang = req.query.lang || 'fi';
+
     if (isNaN(score)) { return res.status(400).json({ error: 'Invalid score' }); }
-    let whereClause = '';
+
+    let sql, params;
+
     if (type === 'daily') {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
-        whereClause = `WHERE created_at >= ${startOfDay}`;
+        sql = `SELECT COUNT(*) as count FROM scores WHERE language = ? AND created_at >= ? AND score > ?`;
+        params = [lang, startOfDay, score];
+    } else {
+        sql = `SELECT COUNT(*) as count FROM scores WHERE language = ? AND score > ?`;
+        params = [lang, score];
     }
-    const sql = `SELECT COUNT(*) as count FROM scores ${whereClause} ${whereClause ? 'AND' : 'WHERE'} score > ?`;
-    db.get(sql, [score], (err, row) => {
+
+    db.get(sql, params, (err, row) => {
         if (err) { return res.status(500).json({ error: err.message }); }
         res.json({ qualifies: row.count < 10 });
     });
 });
 
 app.post('/scores', (req, res) => {
-    const { nickname, score, word_count } = req.body;
+    const { nickname, score, word_count, language } = req.body;
+    const lang = language || 'fi';
+
     if (!nickname || typeof score !== 'number' || typeof word_count !== 'number') {
         return res.status(400).json({ error: 'Invalid payload' });
     }
     const cleanNickname = nickname.trim().slice(0, 20);
     if (!cleanNickname) { return res.status(400).json({ error: 'Nickname cannot be empty' }); }
     const created_at = Math.floor(Date.now() / 1000);
+
     db.run(
-        'INSERT INTO scores (nickname, score, word_count, created_at) VALUES (?, ?, ?, ?)',
-        [cleanNickname, score, word_count, created_at],
+        'INSERT INTO scores (nickname, score, word_count, language, created_at) VALUES (?, ?, ?, ?, ?)',
+        [cleanNickname, score, word_count, lang, created_at],
         function (err) {
             if (err) { return res.status(500).json({ error: err.message }); }
             res.json({ id: this.lastID });
