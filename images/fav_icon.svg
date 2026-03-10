@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="teal" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1ec8a0"/>
+      <stop offset="100%" style="stop-color:#0fb38a"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffcc02"/>
+      <stop offset="40%" style="stop-color:#ffaa00"/>
+      <stop offset="100%" style="stop-color:#f07800"/>
+    </linearGradient>
+    <linearGradient id="orangeShine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffe87a"/>
+      <stop offset="100%" style="stop-color:#ffcc02" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="tileShadow">
+      <feDropShadow dx="0" dy="3" stdDeviation="2" flood-color="#00000044"/>
+    </filter>
+  </defs>
+
+  <!-- Teal background -->
+  <rect width="64" height="64" rx="14" fill="url(#teal)"/>
+
+  <!-- Single big tile -->
+  <rect x="8" y="8" width="48" height="48" rx="12" fill="url(#orange)" filter="url(#tileShadow)"/>
+  <!-- Tile shine top -->
+  <rect x="8" y="8" width="48" height="22" rx="12" fill="url(#orangeShine)" opacity="0.5"/>
+  <!-- Tile inner shadow bottom -->
+  <rect x="8" y="44" width="48" height="12" rx="12" fill="#c05a00" opacity="0.3"/>
+
+  <!-- Letter B -->
+  <text x="32" y="44" font-family="'Arial Rounded MT Bold', 'Arial Black', sans-serif" font-size="36" font-weight="900" text-anchor="middle" fill="#ffffff" style="text-shadow: 0 2px 4px rgba(0,0,0,0.3)">B</text>
+</svg>

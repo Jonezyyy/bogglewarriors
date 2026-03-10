@@ -89,55 +89,28 @@ app.get('/validate-word/:word', (req, res) => {
                 res.json({ exists: false });
             });
     } else {
-        // Use Free Dictionary API for Finnish
-        fetch(`https://freedictionaryapi.com/api/v1/entries/fi/${encodeURIComponent(word)}`)
-            .then(response => {
-                console.log(`Finnish Dictionary API [${word}]: status ${response.status}`);
-                if (!response.ok) {
-                    res.json({ exists: false });
-                    return null;
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data === null) return;
+        // Local SQLite lookup for Finnish (built from kaikki.org dictionary)
+        if (word.length < 3 || word.length > 16 || !/^[a-zäö]+$/.test(word)) {
+            return res.json({ exists: false });
+        }
 
-                const entries = data.entries;
-                if (!Array.isArray(entries) || entries.length === 0) {
-                    res.json({ exists: false });
-                    return;
-                }
+        db.get('SELECT * FROM finnish_words WHERE word = ?', [word], (err, row) => {
+            if (err) {
+                console.error(`Finnish DB error [${word}]:`, err.message);
+                return res.status(500).json({ error: 'Database error' });
+            }
+            if (!row) {
+                console.log(`Finnish DB [${word}]: not found`);
+                return res.json({ exists: false });
+            }
 
-                // A word is an inflection if every sense across all entries has a "form of" tag
-                const allSenses = entries.flatMap(e => e.senses || []);
-                const isInflection = allSenses.length > 0 && allSenses.every(s => s.tags && s.tags.includes('form of'));
+            const isInflection = row.is_inflection === 1;
+            const nominativePlural = row.nominative_plural || null;
+            const isNominativePlural = row.is_nominative_plural === 1;
 
-                // Nominative plural: only relevant for base words
-                // Find the first form tagged nominative+plural (exclude accusative/genitive to avoid overlap)
-                let nominativePlural = null;
-                if (!isInflection) {
-                    for (const entry of entries) {
-                        const form = (entry.forms || []).find(f =>
-                            f.tags && f.tags.includes('nominative') && f.tags.includes('plural') &&
-                            !f.tags.includes('accusative') && !f.tags.includes('genitive') &&
-                            f.word && f.word !== '-'
-                        );
-                        if (form) { nominativePlural = form.word; break; }
-                    }
-                }
-
-                // Is this word itself a nominative plural form?
-                const isNominativePlural = isInflection && allSenses.some(s =>
-                    s.tags && s.tags.includes('nominative') && s.tags.includes('plural')
-                );
-
-                console.log(`Finnish Dictionary API [${word}]: exists=true isInflection=${isInflection} nominativePlural=${nominativePlural} isNominativePlural=${isNominativePlural}`);
-                res.json({ exists: true, isInflection, nominativePlural, isNominativePlural });
-            })
-            .catch(error => {
-                console.error(`Finnish Dictionary API error [${word}]:`, error.message);
-                res.json({ exists: false });
-            });
+            console.log(`Finnish DB [${word}]: exists=true isInflection=${isInflection} nominativePlural=${nominativePlural} isNominativePlural=${isNominativePlural}`);
+            res.json({ exists: true, isInflection, nominativePlural, isNominativePlural });
+        });
     }
 });
 

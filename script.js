@@ -294,16 +294,40 @@ document.addEventListener("DOMContentLoaded", () => {
                     this.isSubmitting = false;
                 }, 300);
             } else if (result.exists) {
+                // Reject base word if its plural is already found
+                if (result.nominativePlural && this.foundWords.has(result.nominativePlural)) {
+                    this.animateInvalidWord();
+                    this.showMessage("Plural already found!", "#ff9900", 2000);
+                    this.incorrectAnswerSound.play();
+                    this.invalidWordSubmitted = true;
+                    setTimeout(() => {
+                        this.resetSelectedTiles();
+                        this.currentWord = [];
+                        this.selectedTiles = [];
+                        this.isSubmitting = false;
+                    }, 300);
+                    return;
+                }
+
                 // Play animation on correct word
                 this.animateCorrectWord();
                 this.correctAnswerSound.play();
-                this.foundWords.set(word.toLowerCase(), {
+                const wordLower = word.toLowerCase();
+                this.foundWords.set(wordLower, {
                     nominativePlural: result.nominativePlural,
                     isInflection: result.isInflection,
                     isNominativePlural: result.isNominativePlural
                 });
                 const points = this.calculateScore(word);
-                this.showMessage(`+${points} points`, "#00dd00", 2000);
+                // Check if this word is the plural of an already-found base word
+                const baseEntry = Array.from(this.foundWords.entries())
+                    .find(([w, m]) => w !== wordLower && m.nominativePlural === wordLower);
+                if (baseEntry) {
+                    const extraPoints = points - this.calculateScore(baseEntry[0]);
+                    this.showMessage(`Plural +${extraPoints} points`, "#00dd00", 2000);
+                } else {
+                    this.showMessage(`+${points} points`, "#00dd00", 2000);
+                }
                 this.selectedWordElement.classList.add('points-popup');
                 this.updateSidebar();
                 this.invalidWordSubmitted = false;
@@ -359,7 +383,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Returns { exists, isInflection, nominativePlural, isNominativePlural } or { error: true, message }
         async validateWord(word) {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 15000);
+            const timeout = setTimeout(() => controller.abort(), 5000);
             try {
                 const response = await fetch(
                     `https://bogglewarriors-production.up.railway.app/validate-word/${word}?lang=${currentLanguage}`,
