@@ -297,7 +297,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Play animation on correct word
                 this.animateCorrectWord();
                 this.correctAnswerSound.play();
-                this.foundWords.set(word, {
+                this.foundWords.set(word.toLowerCase(), {
                     nominativePlural: result.nominativePlural,
                     isInflection: result.isInflection,
                     isNominativePlural: result.isNominativePlural
