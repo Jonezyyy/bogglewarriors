@@ -54,11 +54,59 @@ function initializeDatabase() {
                     db.run("ALTER TABLE scores ADD COLUMN language TEXT DEFAULT 'fi'", (err) => {
                         if (err) { console.error('Error adding language column:', err.message); }
                         else { console.log('Language column added successfully'); }
-                        startServer();
+                        seedFinnishWords();
                     });
                 } else {
-                    startServer();
+                    seedFinnishWords();
                 }
+            });
+        });
+    });
+}
+
+// Seed finnish_words from the bundled repo DB if the persistent volume DB is empty
+function seedFinnishWords() {
+    db.get('SELECT COUNT(*) as count FROM finnish_words', (err, row) => {
+        if (err || (row && row.count > 0)) {
+            if (row) console.log(`finnish_words already has ${row.count} words`);
+            return startServer();
+        }
+
+        // The bundled DB is in __dirname (repo root), persistent volume DB is at DB_PATH
+        const bundledDbPath = path.join(__dirname, 'words.db');
+        if (bundledDbPath === dbPath) {
+            console.log('No DB_PATH set, using bundled DB directly');
+            return startServer();
+        }
+
+        console.log(`Seeding finnish_words from bundled DB: ${bundledDbPath}`);
+        const bundledDb = new sqlite3.Database(bundledDbPath, sqlite3.OPEN_READONLY, (err) => {
+            if (err) {
+                console.error('Cannot open bundled DB:', err.message);
+                return startServer();
+            }
+
+            bundledDb.all('SELECT * FROM finnish_words', (err, rows) => {
+                if (err || !rows || rows.length === 0) {
+                    console.error('No finnish_words in bundled DB:', err?.message);
+                    bundledDb.close();
+                    return startServer();
+                }
+
+                console.log(`Copying ${rows.length} words to persistent DB...`);
+                db.run('BEGIN TRANSACTION', () => {
+                    const stmt = db.prepare('INSERT OR IGNORE INTO finnish_words (word, is_inflection, nominative_plural, is_nominative_plural) VALUES (?, ?, ?, ?)');
+                    for (const r of rows) {
+                        stmt.run(r.word, r.is_inflection, r.nominative_plural, r.is_nominative_plural);
+                    }
+                    stmt.finalize(() => {
+                        db.run('COMMIT', () => {
+                            console.log(`Seeded ${rows.length} finnish words`);
+                            bundledDb.close();
+                            startServer();
+                        });
+                    });
+                });
             });
         });
     });
