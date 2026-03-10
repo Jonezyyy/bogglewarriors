@@ -2,7 +2,6 @@ import express from 'express';
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync, existsSync } from 'fs';
 import cors from 'cors';
 
 const app = express();
@@ -27,70 +26,31 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 function initializeDatabase() {
     db.serialize(() => {
-        db.run('CREATE TABLE IF NOT EXISTS words (word TEXT PRIMARY KEY)', (err) => {
-            if (err) { console.error('Error creating words table:', err.message); return; }
+        db.run(`CREATE TABLE IF NOT EXISTS scores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nickname TEXT NOT NULL,
+            score INTEGER NOT NULL,
+            word_count INTEGER NOT NULL,
+            language TEXT NOT NULL DEFAULT 'fi',
+            created_at INTEGER NOT NULL
+        )`, (err) => {
+            if (err) { console.error('Error creating scores table:', err.message); return; }
 
-            db.run(`CREATE TABLE IF NOT EXISTS scores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nickname TEXT NOT NULL,
-                score INTEGER NOT NULL,
-                word_count INTEGER NOT NULL,
-                language TEXT NOT NULL DEFAULT 'fi',
-                created_at INTEGER NOT NULL
-            )`, (err) => {
-                if (err) { console.error('Error creating scores table:', err.message); return; }
-
-                // Ensure language column exists (for backward compatibility)
-                db.all("PRAGMA table_info(scores)", [], (err, columns) => {
-                    if (err) { console.error('Error checking scores schema:', err.message); return; }
-                    const hasLanguageColumn = columns.some(col => col.name === 'language');
-                    if (!hasLanguageColumn) {
-                        console.log('Adding language column to scores table...');
-                        db.run("ALTER TABLE scores ADD COLUMN language TEXT DEFAULT 'fi'", (err) => {
-                            if (err) { console.error('Error adding language column:', err.message); }
-                            else { console.log('Language column added successfully'); }
-                            checkAndLoadWords();
-                        });
-                    } else {
-                        checkAndLoadWords();
-                    }
-                });
+            // Ensure language column exists (for backward compatibility)
+            db.all("PRAGMA table_info(scores)", [], (err, columns) => {
+                if (err) { console.error('Error checking scores schema:', err.message); return; }
+                const hasLanguageColumn = columns.some(col => col.name === 'language');
+                if (!hasLanguageColumn) {
+                    console.log('Adding language column to scores table...');
+                    db.run("ALTER TABLE scores ADD COLUMN language TEXT DEFAULT 'fi'", (err) => {
+                        if (err) { console.error('Error adding language column:', err.message); }
+                        else { console.log('Language column added successfully'); }
+                        startServer();
+                    });
+                } else {
+                    startServer();
+                }
             });
-        });
-    });
-}
-
-function checkAndLoadWords() {
-    db.get('SELECT COUNT(*) as count FROM words', (err, row) => {
-        if (err) { console.error(err.message); return; }
-
-        if (row.count > 0) {
-            console.log(`Database already contains ${row.count} words.`);
-            startServer();
-            return;
-        }
-
-        const csvPath = path.resolve(__dirname, 'finnish_words.csv');
-        if (!existsSync(csvPath)) {
-            console.error('finnish_words.csv not found!');
-            startServer();
-            return;
-        }
-
-        console.log('Loading words from CSV...');
-        const words = readFileSync(csvPath, 'utf8')
-            .split('\n')
-            .slice(1)
-            .map(line => line.split('\t')[0].trim())
-            .filter(w => w && !w.includes(' '))
-            .map(w => w.toLowerCase());
-
-        const stmt = db.prepare('INSERT OR IGNORE INTO words (word) VALUES (?)');
-        words.forEach(word => stmt.run(word));
-        stmt.finalize((err) => {
-            if (err) { console.error('Error inserting words:', err.message); }
-            else { console.log(`Loaded ${words.length} words into database.`); }
-            startServer();
         });
     });
 }
@@ -129,11 +89,55 @@ app.get('/validate-word/:word', (req, res) => {
                 res.json({ exists: false });
             });
     } else {
-        // Use database for Finnish
-        db.get('SELECT 1 FROM words WHERE word = ?', [word], (err, row) => {
-            if (err) { return res.status(500).json({ error: err.message }); }
-            res.json({ exists: !!row });
-        });
+        // Use Free Dictionary API for Finnish
+        fetch(`https://freedictionaryapi.com/api/v1/entries/fi/${encodeURIComponent(word)}`)
+            .then(response => {
+                console.log(`Finnish Dictionary API [${word}]: status ${response.status}`);
+                if (!response.ok) {
+                    res.json({ exists: false });
+                    return null;
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data === null) return;
+
+                const entries = data.entries;
+                if (!Array.isArray(entries) || entries.length === 0) {
+                    res.json({ exists: false });
+                    return;
+                }
+
+                // A word is an inflection if every sense across all entries has a "form of" tag
+                const allSenses = entries.flatMap(e => e.senses || []);
+                const isInflection = allSenses.length > 0 && allSenses.every(s => s.tags && s.tags.includes('form of'));
+
+                // Nominative plural: only relevant for base words
+                // Find the first form tagged nominative+plural (exclude accusative/genitive to avoid overlap)
+                let nominativePlural = null;
+                if (!isInflection) {
+                    for (const entry of entries) {
+                        const form = (entry.forms || []).find(f =>
+                            f.tags && f.tags.includes('nominative') && f.tags.includes('plural') &&
+                            !f.tags.includes('accusative') && !f.tags.includes('genitive') &&
+                            f.word && f.word !== '-'
+                        );
+                        if (form) { nominativePlural = form.word; break; }
+                    }
+                }
+
+                // Is this word itself a nominative plural form?
+                const isNominativePlural = isInflection && allSenses.some(s =>
+                    s.tags && s.tags.includes('nominative') && s.tags.includes('plural')
+                );
+
+                console.log(`Finnish Dictionary API [${word}]: exists=true isInflection=${isInflection} nominativePlural=${nominativePlural} isNominativePlural=${isNominativePlural}`);
+                res.json({ exists: true, isInflection, nominativePlural, isNominativePlural });
+            })
+            .catch(error => {
+                console.error(`Finnish Dictionary API error [${word}]:`, error.message);
+                res.json({ exists: false });
+            });
     }
 });
 

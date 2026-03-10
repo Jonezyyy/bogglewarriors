@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Boggle Warriors</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=3">
     <link rel="stylesheet" href="leaderboard.css">
 </head>
 <body>
@@ -21,6 +21,7 @@
                 <path d="M8 21h8"/>
             </svg>
         </button>
+        <div id="language-indicator">FI</div>
         <button id="settingsBtn" class="icon-btn" aria-label="Settings">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -64,13 +65,13 @@
     <!-- Nickname modal -->
     <div id="nicknameOverlay" class="modal-overlay">
         <div class="modal">
+            <button class="modal-close" id="nicknameClose">&#10005;</button>
             <h2>&#127881; Top 10!</h2>
             <p>Great job! Save your score to the leaderboard</p>
             <input id="nicknameInput" type="text" maxlength="20" placeholder="Nickname..." autocomplete="off" />
             <div id="nicknameError"></div>
             <div class="nickname-actions">
-                <button id="nicknameSubmit">Save</button>
-                <button id="nicknameSkip">Skip</button>
+                <button id="nicknameSubmit" disabled>Save</button>
             </div>
         </div>
     </div>

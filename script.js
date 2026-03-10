@@ -9,8 +9,8 @@ document.addEventListener("DOMContentLoaded", () => {
             ];
             this.englishDice = [
                 "AAEEGN", "ABBJOO", "ACHOPS", "AFFKPS", "AOOTTW",
-                "CIMOTU", "DEILRX", "DELRUY", "DISTTY", "EGINXU",
-                "EGKLUY", "EHMUNRS", "ENSSSU", "FIPRSY", "GORRVW", "AFFKPS"
+                "CIMOTU", "DEILRX", "DELRUY", "DISTTY", "EEGHNW",
+                "EEINSU", "EHRTVW", "EIOSST", "ELRTTY", "HIMNUQ", "HLNNRZ"
             ];
 
             // DOM elements
@@ -24,7 +24,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // Game state
             this.timeLeft = 90;
-            this.foundWords = new Set();
+            this.foundWords = new Map(); // word -> { nominativePlural, isInflection, isNominativePlural }
             this.isPaused = false;
             this.currentWord = [];
             this.selectedTiles = [];
@@ -34,6 +34,7 @@ document.addEventListener("DOMContentLoaded", () => {
             this.isGameOver = false;
             this.invalidWordSubmitted = false;
             this.messageTimeout = null;
+            this.isSubmitting = false; // Prevent double submissions
 
             // Initialize
             this.bindEvents();
@@ -49,6 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         handleOutsideClick(event) {
+            if (this.isGameOver) return;
             const isClickInsideGame = this.boardElement.contains(event.target) ||
                                       event.target.closest("#newGame") ||
                                       event.target.closest("#submitWord") ||
@@ -98,10 +100,13 @@ document.addEventListener("DOMContentLoaded", () => {
             this.timeLeft = 90;
             this.isPaused = false;
             this.isGameOver = false;
+            this.isCountdown = false;
             this.invalidWordSubmitted = false;
-            this.foundWords.clear();
+            this.foundWords = new Map();
             this.currentWord = [];
+            this.resetSelectedTiles();
             this.selectedTiles = [];
+            this.isSubmitting = false; // Reset submission flag
             this.updateSidebar();
             this.timerElement.style.color = "";
             this.clearMessage();
@@ -110,6 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // ── Countdown & timer ─────────────────────────────────────────────
 
         startCountdown() {
+            this.isCountdown = true;
             let countdown = 3;
             this.shuffleInterval = setInterval(() => this.shuffleBoard(), 100);
             this.countdownInterval = setInterval(() => {
@@ -119,6 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         endCountdown() {
+            this.isCountdown = false;
             clearInterval(this.countdownInterval);
             clearInterval(this.shuffleInterval);
             this.timerElement.textContent = "1:30";
@@ -196,7 +203,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         selectTile(tile) {
-            if (this.isGameOver) return;
+            if (this.isGameOver || this.isCountdown) return;
 
             if (this.invalidWordSubmitted) {
                 this.clearMessage();
@@ -234,23 +241,35 @@ document.addEventListener("DOMContentLoaded", () => {
         // ── Word submission ───────────────────────────────────────────────
 
         async submitWord() {
+            // Prevent double submissions
+            if (this.isSubmitting) return;
+            this.isSubmitting = true;
+
             const word = this.currentWord.join("");
 
             if (word.length < 3) {
+                this.animateInvalidWord();
                 this.showMessage("Too short — at least 3 letters", "#ff9900", 2000);
                 this.incorrectAnswerSound.play();
-                this.resetSelectedTiles();
-                this.currentWord = [];
-                this.selectedTiles = [];
+                setTimeout(() => {
+                    this.resetSelectedTiles();
+                    this.currentWord = [];
+                    this.selectedTiles = [];
+                    this.isSubmitting = false;
+                }, 300);
                 return;
             }
 
-            if (this.foundWords.has(word)) {
+            if (this.foundWords.has(word.toLowerCase())) {
+                this.animateInvalidWord();
                 this.showMessage("Word already found!", "#ff9900", 2000);
                 this.incorrectAnswerSound.play();
-                this.resetSelectedTiles();
-                this.currentWord = [];
-                this.selectedTiles = [];
+                setTimeout(() => {
+                    this.resetSelectedTiles();
+                    this.currentWord = [];
+                    this.selectedTiles = [];
+                    this.isSubmitting = false;
+                }, 300);
                 return;
             }
 
@@ -258,28 +277,86 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const result = await this.validateWord(word);
 
+            if (this.isGameOver) {
+                this.isSubmitting = false;
+                return;
+            }
+
             if (result.error) {
+                this.animateInvalidWord();
                 this.showMessage("Server is not responding", "#ff4444", 3000);
                 this.incorrectAnswerSound.play();
                 this.invalidWordSubmitted = true;
+                setTimeout(() => {
+                    this.resetSelectedTiles();
+                    this.currentWord = [];
+                    this.selectedTiles = [];
+                    this.isSubmitting = false;
+                }, 300);
             } else if (result.exists) {
+                // Play animation on correct word
+                this.animateCorrectWord();
                 this.correctAnswerSound.play();
-                this.foundWords.add(word);
+                this.foundWords.set(word, {
+                    nominativePlural: result.nominativePlural,
+                    isInflection: result.isInflection,
+                    isNominativePlural: result.isNominativePlural
+                });
+                const points = this.calculateScore(word);
+                this.showMessage(`+${points} points`, "#00dd00", 2000);
+                this.selectedWordElement.classList.add('points-popup');
                 this.updateSidebar();
-                this.clearMessage();
                 this.invalidWordSubmitted = false;
+
+                // Reset tiles after animation completes
+                setTimeout(() => {
+                    this.resetSelectedTiles();
+                    this.currentWord = [];
+                    this.selectedTiles = [];
+                    this.isSubmitting = false;
+                    this.selectedWordElement.classList.remove('points-popup');
+                }, 150);
             } else {
+                this.animateInvalidWord();
                 this.showMessage(`"${word}" is not a word`, "#ff4444", 2000);
                 this.incorrectAnswerSound.play();
                 this.invalidWordSubmitted = true;
+                setTimeout(() => {
+                    this.resetSelectedTiles();
+                    this.currentWord = [];
+                    this.selectedTiles = [];
+                    this.isSubmitting = false;
+                }, 300);
             }
-
-            this.resetSelectedTiles();
-            this.currentWord = [];
-            this.selectedTiles = [];
         }
 
-        // Returns { exists: bool } or { error: true, message: string }
+        animateCorrectWord() {
+            // Apply animation to each tile in the word
+            this.selectedTiles.forEach(tile => {
+                tile.classList.add('correct-word');
+            });
+            // Remove animation after it completes (300ms)
+            setTimeout(() => {
+                this.selectedTiles.forEach(tile => {
+                    tile.classList.remove('correct-word');
+                });
+            }, 150);
+        }
+
+        animateInvalidWord() {
+            // Apply combined shake + red flash animation to each selected tile
+            this.selectedTiles.forEach(tile => {
+                tile.classList.add('invalid-word');
+            });
+            // Remove animation after it completes
+            setTimeout(() => {
+                this.selectedTiles.forEach(tile => {
+                    tile.classList.remove('invalid-word');
+                });
+            }, 300);
+        }
+
+        // Returns { exists, isInflection, nominativePlural, isNominativePlural } or { error: true, message }
         async validateWord(word) {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 15000);
@@ -290,7 +367,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 );
                 if (!response.ok) return { error: true, message: `Server error: ${response.status}` };
                 const data = await response.json();
-                return { exists: data.exists };
+                return {
+                    exists: data.exists,
+                    isInflection: data.isInflection || false,
+                    nominativePlural: data.nominativePlural || null,
+                    isNominativePlural: data.isNominativePlural || false
+                };
             } catch (error) {
                 console.error("Error validating word:", error);
                 return { error: true, message: error.message };
@@ -301,13 +383,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // ── Sidebar & scoring ─────────────────────────────────────────────
 
+        isSuperseded(word) {
+            const meta = this.foundWords.get(word);
+            if (!meta || meta.isNominativePlural) return false;
+            return meta.nominativePlural !== null && this.foundWords.has(meta.nominativePlural);
+        }
+
         updateSidebar() {
-			document.getElementById("totalScore").textContent = this.calculateTotalScore();
-			document.getElementById("foundWordsList").innerHTML = 
-			Array.from(this.foundWords).reverse()
-				.map(word => `<li>${word} - ${this.calculateScore(word)}</li>`)
-				.join('');
-}
+            document.getElementById("totalScore").textContent = this.calculateTotalScore();
+            document.getElementById("foundWordsList").innerHTML =
+                Array.from(this.foundWords.keys()).reverse()
+                    .map(word => this.isSuperseded(word)
+                        ? `<li><s>${word} - 0</s></li>`
+                        : `<li>${word} - ${this.calculateScore(word)}</li>`)
+                    .join('');
+        }
 
         calculateScore(word) {
             const l = word.length;
@@ -315,7 +405,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         calculateTotalScore() {
-            return Array.from(this.foundWords).reduce((t, w) => t + this.calculateScore(w), 0);
+            return Array.from(this.foundWords.keys())
+                .filter(w => !this.isSuperseded(w))
+                .reduce((t, w) => t + this.calculateScore(w), 0);
         }
 
         // ── Board ─────────────────────────────────────────────────────────
@@ -326,12 +418,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         shuffleBoard() {
             const letters = this.randomizeDice();
-            this.boardElement.innerHTML = "";
-            for (let row = 0; row < 4; row++) {
-                for (let col = 0; col < 4; col++) {
-                    this.boardElement.appendChild(this.createTile(letters[row * 4 + col], row, col));
-                }
-            }
+            const tiles = this.boardElement.querySelectorAll(".tile");
+            tiles.forEach((tile, i) => {
+                tile.textContent = letters[i];
+            });
         }
 
         randomizeDice() {
@@ -471,6 +561,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Update language if this is the language group
                 if (btn.dataset.lang) {
                     currentLanguage = btn.dataset.lang;
+                    // Update language indicator in top bar
+                    document.getElementById("language-indicator").textContent = currentLanguage.toUpperCase();
+                    // If a game is currently running, restart it with the new language
+                    if (game.timerInterval !== null) {
+                        closeOverlay("settingsOverlay");
+                        game.startNewGame();
+                    }
+                }
+
+                // Update game mode if this is the mode group
+                if (btn.dataset.group) {
+                    currentGameMode = btn.dataset.group;
                 }
             });
         });
@@ -531,17 +633,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.key === "Enter") document.getElementById("nicknameSubmit").click();
     });
 
-    document.getElementById("nicknameSkip").addEventListener("click", () => {
+    document.getElementById("nicknameInput").addEventListener("input", (e) => {
+        // Enable Save button only if nickname has text
+        document.getElementById("nicknameSubmit").disabled = e.target.value.trim() === "";
+    });
+
+    document.getElementById("nicknameClose").addEventListener("click", () => {
         pendingScore = null;
         closeOverlay("nicknameOverlay");
     });
 
-    document.getElementById("nicknameOverlay").addEventListener("click", (e) => {
-        if (e.target === e.currentTarget) {
-            pendingScore = null;
-            closeOverlay("nicknameOverlay");
-        }
-    });
+    // Don't allow closing nickname overlay by clicking backdrop - user must explicitly Save or close with X button
+    // This prevents accidental loss of score
 
-    new BoggleGame();
+    const game = new BoggleGame();
 });

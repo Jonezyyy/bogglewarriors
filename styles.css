@@ -28,10 +28,20 @@ body {
     height: 72px;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 12px;
     padding: 0 14px;
     z-index: 100;
     pointer-events: none;
+}
+
+#top-bar #leaderboardBtn {
+    margin-right: auto;
+}
+
+#top-bar #timer {
+    margin-left: auto;
+    pointer-events: all;
 }
 
 /* ─── Icon Buttons ───────────────────────────────────────────────────────── */
@@ -58,6 +68,7 @@ body {
     box-shadow: none;
     text-shadow: none;
     transition: background 0.2s, transform 0.15s;
+    flex-shrink: 0;
 }
 
 .icon-btn svg {
@@ -77,6 +88,20 @@ body {
     background-image: none;
     transform: scale(0.95);
     box-shadow: none;
+}
+
+/* ─── Language Indicator ───────────────────────────────────────────────– */
+#language-indicator {
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    min-width: 24px;
+    text-align: center;
+    pointer-events: all;
 }
 
 /* ─── Settings overlay ───────────────────────────────────────────────────── */
@@ -260,6 +285,83 @@ body {
 
 .shake {
     animation: shake 0.3s ease;
+}
+
+/* ─── Correct Word Animation ─────────────────────────────────────────────── */
+@keyframes scale {
+  20% {
+    background-color: #d06800;
+    transform: scale(0.9);
+  }
+  50% {
+    transform: scale(1.1);
+    background-color: #00dd00;
+  }
+  90% {
+    background-color: #00dd00;
+  }
+  100% {
+    transform: scale(1.0);
+    background-color: #d06800;
+  }
+}
+
+.correct-word {
+    animation: scale 0.3s ease forwards;
+}
+
+/* ─── Invalid Word Animation ─────────────────────────────────────────────── */
+@keyframes invalidWordShake {
+    0% {
+        background-color: #d06800;
+        transform: translateX(0);
+    }
+    25% {
+        background-color: #d06800;
+        transform: translateX(-5px);
+    }
+    30% {
+        background-color: #ff4444;
+        transform: translateX(-5px);
+    }
+    50% {
+        background-color: #ff4444;
+        transform: translateX(5px);
+    }
+    75% {
+        background-color: #d06800;
+        transform: translateX(-5px);
+    }
+    100% {
+        background-color: #d06800;
+        transform: translateX(0);
+    }
+}
+
+.invalid-word {
+    animation: invalidWordShake 0.3s ease forwards;
+}
+
+/* ─── Points Popup Animation ─────────────────────────────────────────────── */
+@keyframes pointsPopup {
+    0% {
+        transform: scale(0.7);
+        opacity: 0;
+    }
+    30% {
+        transform: scale(1.15);
+    }
+    60% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.points-popup {
+    animation: pointsPopup 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 /* ─── Time Up ────────────────────────────────────────────────────────────── */
