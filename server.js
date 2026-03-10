@@ -13,6 +13,15 @@ const __dirname = path.dirname(__filename);
 app.use(cors());
 app.use(express.json());
 
+const ADMIN_KEY = process.env.ADMIN_KEY;
+
+function requireAdmin(req, res, next) {
+    if (!ADMIN_KEY || req.headers['x-admin-key'] !== ADMIN_KEY) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    next();
+}
+
 const dbPath = path.resolve(process.env.DB_PATH || __dirname, 'words.db');
 console.log(`Database path: ${dbPath}`);
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -178,7 +187,7 @@ app.get('/words', (req, res) => {
     });
 });
 
-app.post('/words', (req, res) => {
+app.post('/words', requireAdmin, (req, res) => {
     const { word } = req.body;
     if (!word || typeof word !== 'string') { return res.status(400).json({ error: 'Invalid payload' }); }
     const cleanWord = word.trim().toLowerCase();
@@ -188,6 +197,24 @@ app.post('/words', (req, res) => {
         if (this.changes === 0) { return res.json({ added: false, message: 'Word already exists' }); }
         res.json({ added: true, word: cleanWord });
     });
+});
+
+app.post('/finnish-words', requireAdmin, (req, res) => {
+    const { word, is_inflection, nominative_plural, is_nominative_plural } = req.body;
+    if (!word || typeof word !== 'string') { return res.status(400).json({ error: 'Invalid payload' }); }
+    const cleanWord = word.trim().toLowerCase();
+    if (!cleanWord || cleanWord.length < 3 || cleanWord.length > 16 || !/^[a-zäö]+$/.test(cleanWord)) {
+        return res.status(400).json({ error: 'Invalid word (3-16 chars, Finnish letters only)' });
+    }
+    db.run(
+        'INSERT OR REPLACE INTO finnish_words (word, is_inflection, nominative_plural, is_nominative_plural) VALUES (?, ?, ?, ?)',
+        [cleanWord, is_inflection ? 1 : 0, nominative_plural || null, is_nominative_plural ? 1 : 0],
+        function (err) {
+            if (err) { return res.status(500).json({ error: err.message }); }
+            console.log(`Finnish word added: ${cleanWord}`);
+            res.json({ added: true, word: cleanWord });
+        }
+    );
 });
 
 app.get('/leaderboard', (req, res) => {
