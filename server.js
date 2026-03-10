@@ -26,6 +26,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
 function initializeDatabase() {
     db.serialize(() => {
+        db.run(`CREATE TABLE IF NOT EXISTS finnish_words (
+            word TEXT PRIMARY KEY,
+            is_inflection INTEGER DEFAULT 0,
+            nominative_plural TEXT,
+            is_nominative_plural INTEGER DEFAULT 0
+        )`, (err) => {
+            if (err) console.error('Error creating finnish_words table:', err.message);
+        });
+
         db.run(`CREATE TABLE IF NOT EXISTS scores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nickname TEXT NOT NULL,
@@ -97,7 +106,7 @@ app.get('/validate-word/:word', (req, res) => {
         db.get('SELECT * FROM finnish_words WHERE word = ?', [word], (err, row) => {
             if (err) {
                 console.error(`Finnish DB error [${word}]:`, err.message);
-                return res.status(500).json({ error: 'Database error' });
+                return res.json({ exists: false });
             }
             if (!row) {
                 console.log(`Finnish DB [${word}]: not found`);
