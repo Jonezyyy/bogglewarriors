@@ -22,29 +22,32 @@ function requireAdmin(req, res, next) {
     next();
 }
 
-const dbPath = path.resolve(process.env.DB_PATH || __dirname, 'words.db');
-console.log(`Database path: ${dbPath}`);
-const db = new sqlite3.Database(dbPath, (err) => {
+// Words DB — always the bundled repo file (read-only at runtime)
+const wordsDbPath = path.join(__dirname, 'words.db');
+console.log(`Words DB path: ${wordsDbPath}`);
+const db = new sqlite3.Database(wordsDbPath, sqlite3.OPEN_READONLY, (err) => {
     if (err) {
-        console.error('Error connecting to database:', err.message);
+        console.error('Error connecting to words database:', err.message);
         process.exit(1);
     }
-    console.log('Connected to SQLite database');
-    initializeDatabase();
+    console.log('Connected to words SQLite database');
 });
 
-function initializeDatabase() {
-    db.serialize(() => {
-        db.run(`CREATE TABLE IF NOT EXISTS finnish_words (
-            word TEXT PRIMARY KEY,
-            is_inflection INTEGER DEFAULT 0,
-            nominative_plural TEXT,
-            is_nominative_plural INTEGER DEFAULT 0
-        )`, (err) => {
-            if (err) console.error('Error creating finnish_words table:', err.message);
-        });
+// Scores DB — persistent volume via SCORES_DB_PATH, falls back to local file
+const scoresDbPath = path.resolve(process.env.SCORES_DB_PATH || __dirname, 'scores.db');
+console.log(`Scores DB path: ${scoresDbPath}`);
+const scoresDb = new sqlite3.Database(scoresDbPath, (err) => {
+    if (err) {
+        console.error('Error connecting to scores database:', err.message);
+        process.exit(1);
+    }
+    console.log('Connected to scores SQLite database');
+    initializeScoresDb();
+});
 
-        db.run(`CREATE TABLE IF NOT EXISTS scores (
+function initializeScoresDb() {
+    scoresDb.serialize(() => {
+        scoresDb.run(`CREATE TABLE IF NOT EXISTS scores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nickname TEXT NOT NULL,
             score INTEGER NOT NULL,
@@ -55,63 +58,65 @@ function initializeDatabase() {
             if (err) { console.error('Error creating scores table:', err.message); return; }
 
             // Ensure language column exists (for backward compatibility)
-            db.all("PRAGMA table_info(scores)", [], (err, columns) => {
+            scoresDb.all("PRAGMA table_info(scores)", [], (err, columns) => {
                 if (err) { console.error('Error checking scores schema:', err.message); return; }
                 const hasLanguageColumn = columns.some(col => col.name === 'language');
                 if (!hasLanguageColumn) {
-                    console.log('Adding language column to scores table...');
-                    db.run("ALTER TABLE scores ADD COLUMN language TEXT DEFAULT 'fi'", (err) => {
-                        if (err) { console.error('Error adding language column:', err.message); }
-                        else { console.log('Language column added successfully'); }
-                        seedFinnishWords();
+                    scoresDb.run("ALTER TABLE scores ADD COLUMN language TEXT DEFAULT 'fi'", (err) => {
+                        if (err) console.error('Error adding language column:', err.message);
+                        migrateScoresFromLegacyDb();
                     });
                 } else {
-                    seedFinnishWords();
+                    migrateScoresFromLegacyDb();
                 }
             });
         });
     });
 }
 
-// Seed finnish_words from the bundled repo DB if the persistent volume DB is empty
-function seedFinnishWords() {
-    db.get('SELECT COUNT(*) as count FROM finnish_words', (err, row) => {
+// One-time migration: if scores.db is empty and the old volume words.db has scores, copy them over
+function migrateScoresFromLegacyDb() {
+    scoresDb.get('SELECT COUNT(*) as count FROM scores', (err, row) => {
         if (err || (row && row.count > 0)) {
-            if (row) console.log(`finnish_words already has ${row.count} words`);
+            if (row) console.log(`scores already has ${row.count} entries`);
             return startServer();
         }
 
-        // The bundled DB is in __dirname (repo root), persistent volume DB is at DB_PATH
-        const bundledDbPath = path.join(__dirname, 'words.db');
-        if (bundledDbPath === dbPath) {
-            console.log('No DB_PATH set, using bundled DB directly');
+        const legacyDbPath = process.env.DB_PATH
+            ? path.resolve(process.env.DB_PATH, 'words.db')
+            : null;
+
+        if (!legacyDbPath) {
+            console.log('No DB_PATH set, skipping legacy score migration');
             return startServer();
         }
 
-        console.log(`Seeding finnish_words from bundled DB: ${bundledDbPath}`);
-        const bundledDb = new sqlite3.Database(bundledDbPath, sqlite3.OPEN_READONLY, (err) => {
+        console.log(`Migrating scores from legacy DB: ${legacyDbPath}`);
+        const legacyDb = new sqlite3.Database(legacyDbPath, sqlite3.OPEN_READONLY, (err) => {
             if (err) {
-                console.error('Cannot open bundled DB:', err.message);
+                console.error('Cannot open legacy DB for migration:', err.message);
                 return startServer();
             }
 
-            bundledDb.all('SELECT * FROM finnish_words', (err, rows) => {
+            legacyDb.all('SELECT nickname, score, word_count, language, created_at FROM scores', (err, rows) => {
                 if (err || !rows || rows.length === 0) {
-                    console.error('No finnish_words in bundled DB:', err?.message);
-                    bundledDb.close();
+                    console.log('No scores to migrate from legacy DB');
+                    legacyDb.close();
                     return startServer();
                 }
 
-                console.log(`Copying ${rows.length} words to persistent DB...`);
-                db.run('BEGIN TRANSACTION', () => {
-                    const stmt = db.prepare('INSERT OR IGNORE INTO finnish_words (word, is_inflection, nominative_plural, is_nominative_plural) VALUES (?, ?, ?, ?)');
+                console.log(`Migrating ${rows.length} scores...`);
+                scoresDb.run('BEGIN TRANSACTION', () => {
+                    const stmt = scoresDb.prepare(
+                        'INSERT INTO scores (nickname, score, word_count, language, created_at) VALUES (?, ?, ?, ?, ?)'
+                    );
                     for (const r of rows) {
-                        stmt.run(r.word, r.is_inflection, r.nominative_plural, r.is_nominative_plural);
+                        stmt.run(r.nickname, r.score, r.word_count, r.language || 'fi', r.created_at);
                     }
                     stmt.finalize(() => {
-                        db.run('COMMIT', () => {
-                            console.log(`Seeded ${rows.length} finnish words`);
-                            bundledDb.close();
+                        scoresDb.run('COMMIT', () => {
+                            console.log(`Migrated ${rows.length} scores from legacy DB`);
+                            legacyDb.close();
                             startServer();
                         });
                     });
@@ -234,7 +239,7 @@ app.get('/leaderboard', (req, res) => {
     }
 
     console.log(`Leaderboard query [${type}, ${lang}]:`, sql, params);
-    db.all(sql, params, (err, rows) => {
+    scoresDb.all(sql, params, (err, rows) => {
         if (err) { 
             console.error(`Leaderboard error [${type}, ${lang}]:`, err);
             return res.status(500).json({ error: err.message }); 
@@ -263,7 +268,7 @@ app.get('/leaderboard/qualifies', (req, res) => {
         params = [lang, score];
     }
 
-    db.get(sql, params, (err, row) => {
+    scoresDb.get(sql, params, (err, row) => {
         if (err) { return res.status(500).json({ error: err.message }); }
         res.json({ qualifies: row.count < 10 });
     });
@@ -280,7 +285,7 @@ app.post('/scores', (req, res) => {
     if (!cleanNickname) { return res.status(400).json({ error: 'Nickname cannot be empty' }); }
     const created_at = Math.floor(Date.now() / 1000);
 
-    db.run(
+    scoresDb.run(
         'INSERT INTO scores (nickname, score, word_count, language, created_at) VALUES (?, ?, ?, ?, ?)',
         [cleanNickname, score, word_count, lang, created_at],
         function (err) {
