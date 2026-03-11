@@ -171,7 +171,20 @@ function writeToDb() {
                     }
                 }
 
+                // Insert nominative plurals that never appeared as their own JSONL entry
+                let pluralsAdded = 0;
+                const addedPlurals = new Set();
+                for (const [, data] of wordData) {
+                    if (data.nominativePlural && !wordData.has(data.nominativePlural) && !addedPlurals.has(data.nominativePlural)) {
+                        stmt.run(data.nominativePlural, 1, null, 1);
+                        addedPlurals.add(data.nominativePlural);
+                        pluralsAdded++;
+                    }
+                }
+
                 stmt.finalize(() => {
+                    inserted += pluralsAdded;
+                    console.log(`  (${pluralsAdded} nominative plurals added as standalone entries)`);
                     db.run('COMMIT', () => {
                         console.log(`\r  Inserted ${inserted} words.`);
 
