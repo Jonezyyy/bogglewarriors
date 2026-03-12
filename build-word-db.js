@@ -73,6 +73,14 @@ function processEntry(entry) {
     const senses = entry.senses || [];
     if (senses.length === 0) return;
 
+    // Skip if all senses in this entry are letter/alphabet names
+    // (categories live at the sense level in kaikki.org dumps)
+    const isLetterNameEntry = senses.every(s => {
+        const cats = (s.categories || []).map(c => (typeof c === 'string' ? c : c.name || '').toLowerCase());
+        return cats.some(c => c.includes('latin letter') || c.includes('letter name') || c.includes('alphabet letter'));
+    });
+    if (isLetterNameEntry) return;
+
     // Skip if all senses are marked as abbreviations or proper nouns
     const hasUsableSense = senses.some(s =>
         !s.tags || (!s.tags.includes('abbreviation') && !s.tags.includes('initialism') && !s.tags.includes('proper-noun'))
