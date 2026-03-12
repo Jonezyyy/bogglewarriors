@@ -51,15 +51,33 @@ function isValidForBoggle(word) {
 // Merges multiple JSONL entries for the same word (different POS)
 const wordData = new Map();
 
+// Parts of speech to exclude entirely
+const EXCLUDED_POS = new Set(['name', 'abbrev', 'character', 'symbol', 'punct']);
+
 function processEntry(entry) {
     // Support both Finnish-only dump and raw all-languages dump
     if (entry.lang_code && entry.lang_code !== 'fi') return;
+
+    // Skip proper nouns, abbreviations, letter names, symbols
+    if (EXCLUDED_POS.has(entry.pos)) return;
+
+    // Skip if the original word starts with a capital letter (proper noun / name)
+    if (entry.word && /^[A-ZÄÖÅ]/.test(entry.word)) return;
+
+    // Skip if top-level tags mark this as an abbreviation
+    if (entry.tags && (entry.tags.includes('abbreviation') || entry.tags.includes('initialism'))) return;
 
     const word = (entry.word || '').toLowerCase();
     if (!isValidForBoggle(word)) return;
 
     const senses = entry.senses || [];
     if (senses.length === 0) return;
+
+    // Skip if all senses are marked as abbreviations or proper nouns
+    const hasUsableSense = senses.some(s =>
+        !s.tags || (!s.tags.includes('abbreviation') && !s.tags.includes('initialism') && !s.tags.includes('proper-noun'))
+    );
+    if (!hasUsableSense) return;
 
     // A sense is "base" if it doesn't have form_of
     const hasBaseSense = senses.some(s => !s.form_of || s.form_of.length === 0);
