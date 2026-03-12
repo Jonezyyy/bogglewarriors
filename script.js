@@ -82,17 +82,6 @@ document.addEventListener("DOMContentLoaded", () => {
             this.clearIntervals();
             this.resetBackground();
             this.resetGameState();
-
-            this.showMessage("Connecting...", "#aaaaaa");
-            // Use a universal test word that exists in both languages
-            const testWord = currentLanguage === 'en' ? 'cat' : 'kissa';
-            const result = await this.validateWord(testWord);
-            if (result.error) {
-                this.showMessage("Server not responding", "#ff4444");
-                return;
-            }
-
-            this.clearMessage();
             this.startCountdown();
         }
 
@@ -116,16 +105,30 @@ document.addEventListener("DOMContentLoaded", () => {
 
         startCountdown() {
             this.isCountdown = true;
+            this.boardElement.querySelectorAll(".tile").forEach(t => {
+                t.style.animationDelay = `${(Math.random() * 0.35).toFixed(2)}s`;
+                t.classList.add("shuffle-shake");
+            });
             let countdown = 3;
+            this.timerElement.textContent = countdown;
             this.shuffleInterval = setInterval(() => this.shuffleBoard(), 100);
             this.countdownInterval = setInterval(() => {
-                this.timerElement.textContent = countdown > 0 ? countdown : "Go!";
-                if (countdown-- <= 0) this.endCountdown();
+                countdown--;
+                if (countdown <= 0) {
+                    this.timerElement.textContent = "Go!";
+                    this.endCountdown();
+                } else {
+                    this.timerElement.textContent = countdown;
+                }
             }, 1000);
         }
 
         endCountdown() {
             this.isCountdown = false;
+            this.boardElement.querySelectorAll(".tile").forEach(t => {
+                t.classList.remove("shuffle-shake");
+                t.style.animationDelay = "";
+            });
             clearInterval(this.countdownInterval);
             clearInterval(this.shuffleInterval);
             this.timerElement.textContent = "1:30";

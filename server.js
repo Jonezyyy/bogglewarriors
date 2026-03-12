@@ -234,7 +234,7 @@ app.get('/leaderboard', (req, res) => {
         sql = `SELECT id, nickname, score, word_count, created_at FROM scores WHERE language = ? AND created_at >= ? ORDER BY score DESC LIMIT 10`;
         params = [lang, startOfDay];
     } else {
-        sql = `SELECT id, nickname, score, word_count, created_at FROM scores WHERE language = ? ORDER BY score DESC LIMIT 10`;
+        sql = `SELECT id, nickname, MAX(score) as score, word_count, created_at FROM scores WHERE language = ? GROUP BY LOWER(nickname) ORDER BY score DESC LIMIT 10`;
         params = [lang];
     }
 
