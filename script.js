@@ -18,9 +18,12 @@ document.addEventListener("DOMContentLoaded", () => {
             this.timerElement = document.getElementById("timer");
             this.sidebarElement = document.getElementById("sidebar");
             this.selectedWordElement = document.getElementById("selected-word");
+            this.newGameButton = document.getElementById("newGame");
             this.timeUpSound = new Audio("sounds/time_up.mp3");
             this.correctAnswerSound = new Audio("sounds/correct_answer.mp3");
             this.incorrectAnswerSound = new Audio("sounds/incorrect_answer.mp3");
+            this.tapSound = new Audio("sounds/tap.m4a");
+            this.tapSound.volume = 0.5;
 
             // Game state
             this.timeLeft = 90;
@@ -35,18 +38,54 @@ document.addEventListener("DOMContentLoaded", () => {
             this.invalidWordSubmitted = false;
             this.messageTimeout = null;
             this.isSubmitting = false; // Prevent double submissions
+            this.isDragging = false;
+            this.dragMoved = false;
+            this.touchMoved = false;
+            this.swipeCanvas = null;
+            this.swipeCtx = null;
+            this.pointerX = 0;
+            this.pointerY = 0;
+            this.pointerActive = false;
+            this.boardLetters = [];
+            this.validBoardWords = new Set();
+            this.totalBoardWords = 0;
+            this.maxBoardScore = 0;
+            this.boardStatsLoaded = false;
+            this.boardStatsError = null;
+            this.hasActiveGame = false;
 
             // Initialize
             this.bindEvents();
             this.initializeBoard();
             this.setInitialBackground();
+            this.setBoardLetters(this.initialLetters);
+            this.updateModeUI();
+            this.updateSidebar();
 
             document.addEventListener("click", (event) => this.handleOutsideClick(event));
         }
 
         bindEvents() {
-            document.getElementById("newGame").addEventListener("click", () => this.startNewGame());
-            document.getElementById("submitWord").addEventListener("click", () => this.submitWord());
+            document.getElementById("newGame").addEventListener("click", () => { 
+                this.tapSound.currentTime = 0; 
+                this.tapSound.play();
+                const isEndMode = this.newGameButton.classList.contains("end-mode");
+                if (isEndMode) {
+                    this.endGame("manual");
+                } else {
+                    this.startNewGame();
+                }
+            });
+            document.getElementById("submitWord").addEventListener("click", () => { this.tapSound.currentTime = 0; this.tapSound.play(); this.submitWord(); });
+
+            // Swipe / drag selection
+            this.boardElement.addEventListener("mousedown", (e) => this.onMouseDown(e));
+            document.addEventListener("mousemove", (e) => this.onMouseMove(e));
+            document.addEventListener("mouseup", (e) => this.onMouseUp(e));
+            this.boardElement.addEventListener("touchstart", (e) => this.onTouchStart(e), { passive: false });
+            this.boardElement.addEventListener("touchmove",  (e) => this.onTouchMove(e),  { passive: false });
+            this.boardElement.addEventListener("touchend",   (e) => this.onTouchEnd(e));
+            document.addEventListener("touchstart", (e) => this.onOutsideTouchStart(e), { passive: true });
         }
 
         handleOutsideClick(event) {
@@ -54,10 +93,12 @@ document.addEventListener("DOMContentLoaded", () => {
             const isClickInsideGame = this.boardElement.contains(event.target) ||
                                       event.target.closest("#newGame") ||
                                       event.target.closest("#submitWord") ||
+                                      event.target.closest("#endRunBtn") ||
                                       event.target.closest("#leaderboardBtn") ||
-                                      event.target.closest("#settingsBtn") ||
-                                      event.target.closest(".modal-overlay");
-            if (!isClickInsideGame) {
+                                      event.target.closest("#hamburgerBtn") ||
+                                      event.target.closest(".modal-overlay") ||
+                                      event.target.closest(".drawer-overlay");
+            if (isClickInsideGame) {
                 this.resetSelectedTiles();
                 this.currentWord = [];
                 this.selectedTiles = [];
@@ -73,6 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     this.boardElement.appendChild(tile);
                 }
             }
+            this.setupSwipeCanvas();
             this.setInitialBackground();
         }
 
@@ -82,6 +124,10 @@ document.addEventListener("DOMContentLoaded", () => {
             this.clearIntervals();
             this.resetBackground();
             this.resetGameState();
+            if (currentPlayMode === "zen") {
+                await this.startZenGame();
+                return;
+            }
             this.startCountdown();
         }
 
@@ -96,14 +142,30 @@ document.addEventListener("DOMContentLoaded", () => {
             this.resetSelectedTiles();
             this.selectedTiles = [];
             this.isSubmitting = false; // Reset submission flag
-            this.updateSidebar();
+            this.isDragging = false;
+            this.dragMoved = false;
+            this.touchMoved = false;
+            this.validBoardWords = new Set();
+            this.totalBoardWords = 0;
+            this.maxBoardScore = 0;
+            this.boardStatsLoaded = false;
+            this.boardStatsError = null;
+            this.hasActiveGame = false;
             this.timerElement.style.color = "";
             this.clearMessage();
+            this.boardElement.querySelectorAll(".tile span").forEach(span => {
+                span.style.transform = "";
+                delete span.dataset.rotation;
+            });
+            this.updateModeUI();
+            this.updateSidebar();
         }
 
         // ── Countdown & timer ─────────────────────────────────────────────
 
         startCountdown() {
+            this.hasActiveGame = true;
+            this.updateModeUI();
             this.isCountdown = true;
             this.boardElement.querySelectorAll(".tile").forEach(t => {
                 t.style.animationDelay = `${(Math.random() * 0.35).toFixed(2)}s`;
@@ -123,6 +185,49 @@ document.addEventListener("DOMContentLoaded", () => {
             }, 1000);
         }
 
+        async startZenGame() {
+            this.hasActiveGame = true;
+            this.timerElement.textContent = "Zen";
+            this.timerElement.style.color = "";
+            this.shuffleBoard();
+            this.updateModeUI();
+            await this.loadBoardAnalysis();
+        }
+
+        async loadBoardAnalysis() {
+            if (currentPlayMode !== "zen" || currentLanguage !== "fi") return;
+
+            this.validBoardWords = new Set();
+            this.totalBoardWords = 0;
+            this.maxBoardScore = 0;
+            this.boardStatsLoaded = false;
+            this.boardStatsError = null;
+            this.updateSidebar();
+
+            try {
+                const response = await fetch(`${API}/board-analysis`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ letters: this.boardLetters, lang: currentLanguage })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                this.validBoardWords = new Set(data.words.map(entry => entry.word));
+                this.totalBoardWords = data.totalWords || data.words.length;
+                this.maxBoardScore = data.maxScore || 0;
+                this.boardStatsLoaded = true;
+            } catch (error) {
+                console.error("Error analyzing board:", error);
+                this.boardStatsError = "Unavailable";
+            } finally {
+                this.updateSidebar();
+            }
+        }
+
         endCountdown() {
             this.isCountdown = false;
             this.boardElement.querySelectorAll(".tile").forEach(t => {
@@ -134,6 +239,7 @@ document.addEventListener("DOMContentLoaded", () => {
             this.timerElement.textContent = "1:30";
             this.shuffleBoard();
             this.startTimer();
+            this.updateModeUI();
         }
 
         startTimer() {
@@ -154,14 +260,29 @@ document.addEventListener("DOMContentLoaded", () => {
             this.timerElement.textContent = `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
         }
 
-        endGame() {
-            clearInterval(this.timerInterval);
-            this.timerElement.textContent = "Time's up!";
-            this.timerElement.style.color = "red";
+        endGame(reason = "timeout") {
+            if (this.isGameOver) return;
+
+            this.clearIntervals();
+            this.hasActiveGame = false;
             this.isGameOver = true;
-            this.timeUpSound.play();
-            this.setTimeUpBackground();
-            checkAndPromptScore(this.calculateTotalScore(), this.foundWords.size);
+            this.resetSelectedTiles();
+            this.currentWord = [];
+            this.selectedTiles = [];
+
+            if (reason === "timeout") {
+                this.timerElement.textContent = "Time's up!";
+                this.timerElement.style.color = "red";
+                this.timeUpSound.play();
+                this.setTimeUpBackground();
+            } else {
+                this.timerElement.textContent = "Finished";
+                this.timerElement.style.color = "";
+                this.showMessage("Run finished", "#00dd00", 2000);
+            }
+
+            this.updateModeUI();
+            checkAndPromptScore(this.calculateTotalScore(), this.foundWords.size, currentPlayMode);
         }
 
 
@@ -191,6 +312,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateSelectedWordDisplay() {
             this.selectedWordElement.style.color = "white";
             this.selectedWordElement.textContent = this.currentWord.join("");
+            this.drawSelectionPath();
         }
 
         // ── Tile selection ────────────────────────────────────────────────
@@ -198,10 +320,11 @@ document.addEventListener("DOMContentLoaded", () => {
         createTile(letter, row, col) {
             const tile = document.createElement("div");
             tile.classList.add("tile");
-            tile.textContent = letter;
+            const span = document.createElement("span");
+            span.textContent = letter;
+            tile.appendChild(span);
             tile.dataset.row = row;
             tile.dataset.col = col;
-            tile.addEventListener("click", () => this.selectTile(tile));
             return tile;
         }
 
@@ -229,6 +352,8 @@ document.addEventListener("DOMContentLoaded", () => {
             tile.classList.add("selected");
             this.currentWord.push(tile.textContent);
             this.selectedTiles.push(tile);
+            this.tapSound.currentTime = 0;
+            this.tapSound.play();
             this.updateSelectedWordDisplay();
         }
 
@@ -239,6 +364,139 @@ document.addEventListener("DOMContentLoaded", () => {
                 Math.abs(parseInt(last.dataset.row) - parseInt(tile.dataset.row)) <= 1 &&
                 Math.abs(parseInt(last.dataset.col) - parseInt(tile.dataset.col)) <= 1
             );
+        }
+
+        // ── Swipe / drag handlers ─────────────────────────────────────────
+
+        // Returns the tile under (x, y) only if the point is inside its inner
+        // 75% hit area, ignoring edge pixels to prevent accidental mis-selections.
+        tileAtPoint(x, y) {
+            const el = document.elementFromPoint(x, y);
+            const tile = el ? el.closest('.tile') : null;
+            if (!tile) return null;
+            const r = tile.getBoundingClientRect();
+            const margin = 0.125; // 12.5% inset on each side = 75% inner area
+            const inX = x >= r.left + r.width  * margin && x <= r.right  - r.width  * margin;
+            const inY = y >= r.top  + r.height * margin && y <= r.bottom - r.height * margin;
+            return (inX && inY) ? tile : null;
+        }
+
+        onMouseDown(e) {
+            const tile = e.target.closest(".tile");
+            if (!tile) return;
+            this.isDragging = true;
+            this.dragMoved = false;
+            this.pointerX = e.clientX;
+            this.pointerY = e.clientY;
+            this.pointerActive = true;
+            this.startSwipe(tile);
+        }
+
+        onMouseMove(e) {
+            this.pointerX = e.clientX;
+            this.pointerY = e.clientY;
+            if (!this.isDragging) return;
+            this.drawSelectionPath();
+            const tile = this.tileAtPoint(e.clientX, e.clientY);
+            if (!tile) return;
+            const last = this.selectedTiles[this.selectedTiles.length - 1];
+            if (tile !== last) {
+                this.dragMoved = true;
+                this.swipeToTile(tile);
+            }
+        }
+
+        onMouseUp(e) {
+            if (!this.isDragging) return;
+            this.isDragging = false;
+            this.pointerActive = false;
+            if (this.dragMoved) {
+                this.submitWord();
+            }
+        }
+
+        onTouchStart(e) {
+            e.preventDefault();
+            this.touchMoved = false;
+            const touch = e.touches[0];
+            this.pointerX = touch.clientX;
+            this.pointerY = touch.clientY;
+            this.pointerActive = true;
+            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            const tile = el ? el.closest(".tile") : null;
+            this.startSwipe(tile);
+        }
+
+        onTouchMove(e) {
+            e.preventDefault();
+            const touch = e.touches[0];
+            this.pointerX = touch.clientX;
+            this.pointerY = touch.clientY;
+            this.drawSelectionPath();
+            const tile = this.tileAtPoint(touch.clientX, touch.clientY);
+            const lenBefore = this.selectedTiles.length;
+            this.swipeToTile(tile);
+            if (this.selectedTiles.length !== lenBefore) this.touchMoved = true;
+        }
+
+        onTouchEnd(e) {
+            if (this.isGameOver || this.isCountdown) return;
+            this.pointerActive = false;
+            // Only auto-submit when the finger swiped across tiles.
+            // Single taps just select a tile; the user presses Submit to submit.
+            if (!this.touchMoved) return;
+            this.touchMoved = false;
+            this.submitWord();
+        }
+
+        startSwipe(tile) {
+            if (!tile) return;
+            this.selectTile(tile);
+        }
+
+        onOutsideTouchStart(e) {
+            if (this.isGameOver) return;
+            if (this.selectedTiles.length === 0) return;
+            const touch = e.touches[0];
+            const el = document.elementFromPoint(touch.clientX, touch.clientY);
+            const isInsideBoard = el && this.boardElement.contains(el);
+            const isButton = el && (el.closest('#submitWord') || el.closest('#newGame'));
+            if (!isInsideBoard && !isButton) {
+                this.resetSelectedTiles();
+                this.currentWord = [];
+                this.selectedTiles = [];
+                this.selectedWordElement.textContent = "";
+            }
+        }
+
+        swipeToTile(tile) {
+            if (this.isGameOver || this.isCountdown) return;
+            if (!tile) return;
+            const last = this.selectedTiles[this.selectedTiles.length - 1];
+            if (tile === last) return; // still hovering over the same tile
+
+            // Rubber-band: swiping back to second-to-last deselects the last tile
+            const secondToLast = this.selectedTiles[this.selectedTiles.length - 2];
+            if (tile === secondToLast) {
+                const removed = this.selectedTiles.pop();
+                this.currentWord.pop();
+                removed.classList.remove("selected");
+                this.updateSelectedWordDisplay();
+                return;
+            }
+
+            // Can't loop back to an already-selected tile
+            if (this.selectedTiles.includes(tile)) return;
+
+            // Must be adjacent to the last selected tile
+            if (!this.isAdjacent(tile)) return;
+
+            tile.classList.add("selected");
+            this.currentWord.push(tile.textContent);
+            this.selectedTiles.push(tile);
+            this.tapSound.currentTime = 0;
+            this.tapSound.play();
+            this.updateSelectedWordDisplay();
         }
 
         // ── Word submission ───────────────────────────────────────────────
@@ -416,14 +674,82 @@ document.addEventListener("DOMContentLoaded", () => {
             return meta.nominativePlural !== null && this.foundWords.has(meta.nominativePlural);
         }
 
+        getFoundProgressText() {
+            if (this.boardStatsError) return this.boardStatsError;
+            if (!this.boardStatsLoaded) return "Calculating...";
+
+            const foundCount = Array.from(this.foundWords.keys())
+                .filter(word => this.validBoardWords.has(word))
+                .length;
+            const percentage = this.totalBoardWords === 0
+                ? 0
+                : Math.round((foundCount / this.totalBoardWords) * 100);
+
+            return `${percentage}% (${foundCount} / ${this.totalBoardWords} words)`;
+        }
+
+        updateModeUI() {
+            const isZenGameActive = currentPlayMode === "zen" && this.hasActiveGame && !this.isGameOver;
+            
+            if (isZenGameActive) {
+                this.newGameButton.textContent = "End";
+                this.newGameButton.classList.add("end-mode");
+            } else {
+                this.newGameButton.textContent = "New";
+                this.newGameButton.classList.remove("end-mode");
+            }
+
+            if (!this.hasActiveGame && !this.isGameOver) {
+                this.timerElement.textContent = currentPlayMode === "zen" ? "Zen" : "1:30";
+            }
+        }
+
         updateSidebar() {
             document.getElementById("totalScore").textContent = this.calculateTotalScore();
-            document.getElementById("foundWordsList").innerHTML =
-                Array.from(this.foundWords.keys()).reverse()
-                    .map(word => this.isSuperseded(word)
-                        ? `<li><s>${word} - 0</s></li>`
-                        : `<li>${word} - ${this.calculateScore(word)}</li>`)
-                    .join('');
+            const boardStatsElement = document.getElementById("boardStats");
+            const maxBoardScoreElement = document.getElementById("maxBoardScore");
+            const foundProgressElement = document.getElementById("foundProgress");
+            const foundWordsHeadingElement = document.getElementById("foundWordsHeading");
+            const foundWordsCount = this.foundWords.size;
+
+            if (currentPlayMode === "zen") {
+                boardStatsElement.classList.remove("hidden");
+                maxBoardScoreElement.textContent = this.boardStatsLoaded ? this.maxBoardScore : "...";
+                foundProgressElement.classList.add("hidden");
+                foundWordsHeadingElement.textContent = "Found Words";
+            } else {
+                boardStatsElement.classList.add("hidden");
+                foundWordsHeadingElement.textContent = `Found Words: ${foundWordsCount}`;
+            }
+
+            // Organize found words by letter count
+            const words34 = [];
+            const words5 = [];
+            const words6 = [];
+            const words7plus = [];
+
+            Array.from(this.foundWords.keys()).reverse().forEach(word => {
+                const wordLen = word.length;
+                const score = this.calculateScore(word);
+                const displayText = this.isSuperseded(word) 
+                    ? `<li><s>${word} - 0</s></li>` 
+                    : `<li>${word} - ${score}</li>`;
+
+                if (wordLen === 3 || wordLen === 4) {
+                    words34.push(displayText);
+                } else if (wordLen === 5) {
+                    words5.push(displayText);
+                } else if (wordLen === 6) {
+                    words6.push(displayText);
+                } else if (wordLen >= 7) {
+                    words7plus.push(displayText);
+                }
+            });
+
+            document.getElementById("foundWords-34").innerHTML = words34.join('');
+            document.getElementById("foundWords-5").innerHTML = words5.join('');
+            document.getElementById("foundWords-6").innerHTML = words6.join('');
+            document.getElementById("foundWords-7plus").innerHTML = words7plus.join('');
         }
 
         calculateScore(word) {
@@ -439,15 +765,76 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // ── Board ─────────────────────────────────────────────────────────
 
+        setBoardLetters(letters) {
+            this.boardLetters = [...letters];
+        }
+
         resetSelectedTiles() {
             this.boardElement.querySelectorAll(".selected").forEach(t => t.classList.remove("selected"));
+            if (this.swipeCanvas) this.swipeCanvas.width = this.swipeCanvas.width; // clears canvas
+        }
+
+        setupSwipeCanvas() {
+            const old = this.boardElement.querySelector('.swipe-canvas');
+            if (old) old.remove();
+            const canvas = document.createElement('canvas');
+            canvas.classList.add('swipe-canvas');
+            this.boardElement.appendChild(canvas);
+            this.swipeCanvas = canvas;
+            this.swipeCtx = canvas.getContext('2d');
+        }
+
+        drawSelectionPath() {
+            if (!this.swipeCanvas || this.selectedTiles.length === 0) {
+                if (this.swipeCanvas) this.swipeCanvas.width = this.swipeCanvas.width;
+                return;
+            }
+            const canvas = this.swipeCanvas;
+            const ctx = this.swipeCtx;
+            const boardRect = this.boardElement.getBoundingClientRect();
+            canvas.width  = boardRect.width;
+            canvas.height = boardRect.height;
+
+            const centers = this.selectedTiles.map(tile => {
+                const r = tile.getBoundingClientRect();
+                return {
+                    x: r.left - boardRect.left + r.width  / 2,
+                    y: r.top  - boardRect.top  + r.height / 2
+                };
+            });
+
+            // Connecting line between committed tiles
+            if (centers.length >= 2) {
+                ctx.beginPath();
+                ctx.moveTo(centers[0].x, centers[0].y);
+                for (let i = 1; i < centers.length; i++) {
+                    ctx.lineTo(centers[i].x, centers[i].y);
+                }
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+                ctx.lineWidth   = 40;
+                ctx.lineCap     = 'round';
+                ctx.lineJoin    = 'round';
+                ctx.stroke();
+            }
+
         }
 
         shuffleBoard() {
             const letters = this.randomizeDice();
+            this.setBoardLetters(letters);
+            const rotations = [0, 90, 180, 270];
             const tiles = this.boardElement.querySelectorAll(".tile");
             tiles.forEach((tile, i) => {
-                tile.textContent = letters[i];
+                const span = tile.querySelector("span");
+                span.textContent = letters[i];
+                if (groupMode) {
+                    const deg = rotations[Math.floor(Math.random() * 4)];
+                    span.dataset.rotation = String(deg);
+                    span.style.transform = `rotate(${deg}deg)`;
+                } else {
+                    span.style.transform = "";
+                    delete span.dataset.rotation;
+                }
             });
         }
 
@@ -502,6 +889,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let currentLbType = "daily";
     let currentLanguage = "fi";
+    let currentPlayMode = "timed";
+    let currentVisualMode = "solo";
+    let groupMode = false;
 
     function formatLbDate(unixSeconds) {
         const d = new Date(unixSeconds * 1000);
@@ -518,7 +908,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const list = document.getElementById("leaderboardList");
         list.innerHTML = `<li class="lb-loading">Loading...</li>`;
         try {
-            const res = await fetch(`${API}/leaderboard?type=${type}&lang=${currentLanguage}`);
+            const res = await fetch(`${API}/leaderboard?type=${type}&lang=${currentLanguage}&mode=timed`);
             if (!res.ok) throw new Error("Server error");
             const rows = await res.json();
             if (rows.length === 0) {
@@ -544,6 +934,38 @@ document.addEventListener("DOMContentLoaded", () => {
         return str.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
     }
 
+    function syncGameModeButtons() {
+        document.querySelectorAll("[data-game-mode]").forEach(btn => {
+            const gameMode = btn.dataset.gameMode;
+            const isActive = (gameMode === "zen" && currentPlayMode === "zen") ||
+                            (gameMode === "solo" && currentPlayMode === "timed" && currentVisualMode === "solo") ||
+                            (gameMode === "group" && currentPlayMode === "timed" && currentVisualMode === "group");
+            btn.classList.toggle("active", isActive);
+        });
+    }
+
+    function syncLanguageButtons() {
+        document.querySelectorAll("[data-lang]").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.lang === currentLanguage);
+        });
+    }
+
+
+
+    function updateUnlimitedAvailability() {
+        const zenButton = document.getElementById("zenModeBtn");
+        const playModeHint = document.getElementById("playModeHint");
+        const zenAvailable = currentLanguage === "fi";
+
+        zenButton.disabled = !zenAvailable;
+        playModeHint.classList.toggle("hidden", zenAvailable);
+
+        if (!zenAvailable && currentPlayMode === "zen") {
+            currentPlayMode = "timed";
+            syncPlayModeButtons();
+        }
+    }
+
     document.getElementById("leaderboardBtn").addEventListener("click", (e) => {
         e.stopPropagation();
         openOverlay("leaderboardOverlay");
@@ -566,9 +988,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+
+
     // ── Settings ───────────────────────────────────────────────────────────
 
-    document.getElementById("settingsBtn").addEventListener("click", (e) => {
+    document.getElementById("hamburgerBtn").addEventListener("click", (e) => {
         e.stopPropagation();
         openOverlay("settingsOverlay");
     });
@@ -579,29 +1003,49 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target === e.currentTarget) closeOverlay("settingsOverlay");
     });
 
-    document.querySelectorAll(".settings-options").forEach(group => {
-        group.querySelectorAll(".settings-option").forEach(btn => {
-            btn.addEventListener("click", () => {
-                group.querySelectorAll(".settings-option").forEach(b => b.classList.remove("active"));
-                btn.classList.add("active");
+    document.querySelectorAll(".settings-option").forEach(btn => {
+        btn.addEventListener("click", () => {
+            if (btn.dataset.lang) {
+                currentLanguage = btn.dataset.lang;
+                document.getElementById("language-indicator").textContent = currentLanguage.toUpperCase();
+                syncLanguageButtons();
+                updateUnlimitedAvailability();
 
-                // Update language if this is the language group
-                if (btn.dataset.lang) {
-                    currentLanguage = btn.dataset.lang;
-                    // Update language indicator in top bar
-                    document.getElementById("language-indicator").textContent = currentLanguage.toUpperCase();
-                    // If a game is currently running, restart it with the new language
-                    if (game.timerInterval !== null) {
-                        closeOverlay("settingsOverlay");
-                        game.startNewGame();
-                    }
+                if (game.hasActiveGame) {
+                    closeOverlay("settingsOverlay");
+                    game.startNewGame();
+                    return;
                 }
 
-                // Update game mode if this is the mode group
-                if (btn.dataset.group) {
-                    currentGameMode = btn.dataset.group;
+                game.updateModeUI();
+                game.updateSidebar();
+                return;
+            }
+
+            if (btn.dataset.gameMode) {
+                const gameMode = btn.dataset.gameMode;
+                if (gameMode === "zen") {
+                    currentPlayMode = "zen";
+                } else if (gameMode === "solo") {
+                    currentPlayMode = "timed";
+                    currentVisualMode = "solo";
+                } else if (gameMode === "group") {
+                    currentPlayMode = "timed";
+                    currentVisualMode = "group";
                 }
-            });
+                groupMode = currentVisualMode === "group";
+                syncGameModeButtons();
+
+                if (game.hasActiveGame) {
+                    closeOverlay("settingsOverlay");
+                    game.startNewGame();
+                    return;
+                }
+
+                game.updateModeUI();
+                game.updateSidebar();
+                return;
+            }
         });
     });
 
@@ -609,18 +1053,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let pendingScore = null;
 
-    async function checkAndPromptScore(score, wordCount) {
-        if (score <= 0) return;
+    async function checkAndPromptScore(score, wordCount, mode = currentPlayMode) {
+        if (score <= 0 || mode === "zen") return;
         try {
-            // Check both alltime and weekly in parallel
             const [resAll, resDay] = await Promise.all([
-                fetch(`${API}/leaderboard/qualifies?score=${score}&type=alltime&lang=${currentLanguage}`),
-                fetch(`${API}/leaderboard/qualifies?score=${score}&type=daily&lang=${currentLanguage}`)
+                fetch(`${API}/leaderboard/qualifies?score=${score}&type=alltime&lang=${currentLanguage}&mode=timed`),
+                fetch(`${API}/leaderboard/qualifies?score=${score}&type=daily&lang=${currentLanguage}&mode=timed`)
             ]);
             const all = await resAll.json();
             const day = await resDay.json();
             if (all.qualifies || day.qualifies) {
-                pendingScore = { score, wordCount };
+                pendingScore = { score, wordCount, mode };
                 document.getElementById("nicknameInput").value = "";
                 document.getElementById("nicknameError").textContent = "";
                 openOverlay("nicknameOverlay");
@@ -632,12 +1075,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function submitScore(nickname) {
         if (!pendingScore) return;
-        const { score, wordCount } = pendingScore;
+        const { score, wordCount, mode } = pendingScore;
         try {
             const res = await fetch(`${API}/scores`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nickname, score, word_count: wordCount, language: currentLanguage })
+                body: JSON.stringify({ nickname, score, word_count: wordCount, language: currentLanguage, mode })
             });
             if (!res.ok) throw new Error("Server error");
             pendingScore = null;
@@ -674,4 +1117,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // This prevents accidental loss of score
 
     const game = new BoggleGame();
+
+    syncGameModeButtons();
+    syncLanguageButtons();
+    updateUnlimitedAvailability();
 });

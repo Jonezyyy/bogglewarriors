@@ -14,12 +14,200 @@ app.use(cors());
 app.use(express.json());
 
 const ADMIN_KEY = process.env.ADMIN_KEY;
+const BOARD_SIZE = 4;
+const BOARD_CELLS = BOARD_SIZE * BOARD_SIZE;
+const MAX_WORD_LENGTH = 16;
+
+let finnishWordCache = null;
+let finnishWordCachePromise = null;
 
 function requireAdmin(req, res, next) {
     if (!ADMIN_KEY || req.headers['x-admin-key'] !== ADMIN_KEY) {
         return res.status(403).json({ error: 'Forbidden' });
     }
     next();
+}
+
+function ensureScoreColumns(columns, callback) {
+    const pendingColumns = [];
+
+    if (!columns.some(col => col.name === 'language')) {
+        pendingColumns.push({
+            name: 'language',
+            sql: "ALTER TABLE scores ADD COLUMN language TEXT DEFAULT 'fi'"
+        });
+    }
+
+    if (!columns.some(col => col.name === 'mode')) {
+        pendingColumns.push({
+            name: 'mode',
+            sql: "ALTER TABLE scores ADD COLUMN mode TEXT DEFAULT 'timed'"
+        });
+    }
+
+    const addNextColumn = () => {
+        if (pendingColumns.length === 0) {
+            callback();
+            return;
+        }
+
+        const nextColumn = pendingColumns.shift();
+        scoresDb.run(nextColumn.sql, (err) => {
+            if (err) {
+                console.error(`Error adding ${nextColumn.name} column:`, err.message);
+            }
+            addNextColumn();
+        });
+    };
+
+    addNextColumn();
+}
+
+function calculateWordScore(word) {
+    const length = word.length;
+    return length >= 8 ? 11 : length === 7 ? 5 : length === 6 ? 3 : length === 5 ? 2 : length >= 3 ? 1 : 0;
+}
+
+function isSupersededWord(word, metadataByWord) {
+    const meta = metadataByWord.get(word);
+    if (!meta || meta.isNominativePlural) return false;
+    return meta.nominativePlural !== null && metadataByWord.has(meta.nominativePlural);
+}
+
+function getScoreMode(value) {
+    return value === 'unlimited' ? 'unlimited' : 'timed';
+}
+
+function normalizeBoardLetters(letters) {
+    if (!Array.isArray(letters) || letters.length !== BOARD_CELLS) return null;
+
+    const normalized = letters.map(letter => {
+        if (typeof letter !== 'string') return null;
+        const trimmed = letter.trim().toLowerCase();
+        if (!/^[a-zäö]$/.test(trimmed)) return null;
+        return trimmed;
+    });
+
+    return normalized.every(Boolean) ? normalized : null;
+}
+
+function buildBoardNeighbors() {
+    const neighbors = Array.from({ length: BOARD_CELLS }, () => []);
+
+    for (let row = 0; row < BOARD_SIZE; row++) {
+        for (let col = 0; col < BOARD_SIZE; col++) {
+            const index = row * BOARD_SIZE + col;
+            for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
+                for (let colOffset = -1; colOffset <= 1; colOffset++) {
+                    if (rowOffset === 0 && colOffset === 0) continue;
+                    const nextRow = row + rowOffset;
+                    const nextCol = col + colOffset;
+                    if (nextRow < 0 || nextRow >= BOARD_SIZE || nextCol < 0 || nextCol >= BOARD_SIZE) continue;
+                    neighbors[index].push(nextRow * BOARD_SIZE + nextCol);
+                }
+            }
+        }
+    }
+
+    return neighbors;
+}
+
+const boardNeighbors = buildBoardNeighbors();
+
+function loadFinnishWordCache() {
+    if (finnishWordCache) {
+        return Promise.resolve(finnishWordCache);
+    }
+
+    if (finnishWordCachePromise) {
+        return finnishWordCachePromise;
+    }
+
+    finnishWordCachePromise = new Promise((resolve, reject) => {
+        db.all(
+            `SELECT word, nominative_plural, is_nominative_plural
+             FROM finnish_words
+             WHERE LENGTH(word) BETWEEN 3 AND 16`,
+            [],
+            (err, rows) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                const metadataByWord = new Map();
+                const prefixes = new Set();
+
+                for (const row of rows) {
+                    metadataByWord.set(row.word, {
+                        nominativePlural: row.nominative_plural || null,
+                        isNominativePlural: row.is_nominative_plural === 1
+                    });
+
+                    for (let index = 1; index <= row.word.length; index++) {
+                        prefixes.add(row.word.slice(0, index));
+                    }
+                }
+
+                finnishWordCache = { metadataByWord, prefixes };
+                resolve(finnishWordCache);
+            }
+        );
+    }).catch((error) => {
+        finnishWordCachePromise = null;
+        throw error;
+    });
+
+    return finnishWordCachePromise;
+}
+
+function analyzeFinnishBoard(letters, cache) {
+    const foundWords = new Set();
+    const visited = new Array(BOARD_CELLS).fill(false);
+
+    function dfs(index, currentWord) {
+        const nextWord = currentWord + letters[index];
+        if (!cache.prefixes.has(nextWord)) return;
+
+        if (cache.metadataByWord.has(nextWord)) {
+            foundWords.add(nextWord);
+        }
+
+        if (nextWord.length >= MAX_WORD_LENGTH) return;
+
+        visited[index] = true;
+        for (const neighbor of boardNeighbors[index]) {
+            if (!visited[neighbor]) {
+                dfs(neighbor, nextWord);
+            }
+        }
+        visited[index] = false;
+    }
+
+    for (let index = 0; index < BOARD_CELLS; index++) {
+        dfs(index, '');
+    }
+
+    const foundMetadata = new Map();
+    const words = Array.from(foundWords).sort().map((word) => {
+        const meta = cache.metadataByWord.get(word);
+        foundMetadata.set(word, meta);
+        return {
+            word,
+            nominativePlural: meta.nominativePlural,
+            isNominativePlural: meta.isNominativePlural
+        };
+    });
+
+    const maxScore = words.reduce((total, entry) => {
+        return total + (isSupersededWord(entry.word, foundMetadata) ? 0 : calculateWordScore(entry.word));
+    }, 0);
+
+    return {
+        words,
+        totalWords: words.length,
+        maxScore
+    };
 }
 
 // Words DB — always the bundled repo file (read-only at runtime)
@@ -53,22 +241,14 @@ function initializeScoresDb() {
             score INTEGER NOT NULL,
             word_count INTEGER NOT NULL,
             language TEXT NOT NULL DEFAULT 'fi',
+            mode TEXT NOT NULL DEFAULT 'timed',
             created_at INTEGER NOT NULL
         )`, (err) => {
             if (err) { console.error('Error creating scores table:', err.message); return; }
 
-            // Ensure language column exists (for backward compatibility)
             scoresDb.all("PRAGMA table_info(scores)", [], (err, columns) => {
                 if (err) { console.error('Error checking scores schema:', err.message); return; }
-                const hasLanguageColumn = columns.some(col => col.name === 'language');
-                if (!hasLanguageColumn) {
-                    scoresDb.run("ALTER TABLE scores ADD COLUMN language TEXT DEFAULT 'fi'", (err) => {
-                        if (err) console.error('Error adding language column:', err.message);
-                        migrateScoresFromLegacyDb();
-                    });
-                } else {
-                    migrateScoresFromLegacyDb();
-                }
+                ensureScoreColumns(columns, migrateScoresFromLegacyDb);
             });
         });
     });
@@ -192,6 +372,27 @@ app.get('/words', (req, res) => {
     });
 });
 
+app.post('/board-analysis', async (req, res) => {
+    const lang = req.body.lang || 'fi';
+    const letters = normalizeBoardLetters(req.body.letters);
+
+    if (lang !== 'fi') {
+        return res.status(400).json({ error: 'Board analysis is currently available in Finnish only' });
+    }
+
+    if (!letters) {
+        return res.status(400).json({ error: 'Invalid board letters' });
+    }
+
+    try {
+        const cache = await loadFinnishWordCache();
+        res.json(analyzeFinnishBoard(letters, cache));
+    } catch (error) {
+        console.error('Board analysis error:', error.message);
+        res.status(500).json({ error: 'Could not analyze board' });
+    }
+});
+
 app.post('/words', requireAdmin, (req, res) => {
     const { word } = req.body;
     if (!word || typeof word !== 'string') { return res.status(400).json({ error: 'Invalid payload' }); }
@@ -225,26 +426,27 @@ app.post('/finnish-words', requireAdmin, (req, res) => {
 app.get('/leaderboard', (req, res) => {
     const type = req.query.type === 'daily' ? 'daily' : 'alltime';
     const lang = req.query.lang || 'fi';
+    const mode = getScoreMode(req.query.mode);
 
     let sql, params;
 
     if (type === 'daily') {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
-        sql = `SELECT id, nickname, score, word_count, created_at FROM scores WHERE language = ? AND created_at >= ? ORDER BY score DESC LIMIT 10`;
-        params = [lang, startOfDay];
+        sql = `SELECT id, nickname, score, word_count, created_at FROM scores WHERE language = ? AND mode = ? AND created_at >= ? ORDER BY score DESC LIMIT 10`;
+        params = [lang, mode, startOfDay];
     } else {
-        sql = `SELECT id, nickname, MAX(score) as score, word_count, created_at FROM scores WHERE language = ? GROUP BY LOWER(nickname) ORDER BY score DESC LIMIT 10`;
-        params = [lang];
+        sql = `SELECT id, nickname, MAX(score) as score, word_count, created_at FROM scores WHERE language = ? AND mode = ? GROUP BY LOWER(nickname) ORDER BY score DESC LIMIT 10`;
+        params = [lang, mode];
     }
 
-    console.log(`Leaderboard query [${type}, ${lang}]:`, sql, params);
+    console.log(`Leaderboard query [${type}, ${lang}, ${mode}]:`, sql, params);
     scoresDb.all(sql, params, (err, rows) => {
         if (err) { 
-            console.error(`Leaderboard error [${type}, ${lang}]:`, err);
+            console.error(`Leaderboard error [${type}, ${lang}, ${mode}]:`, err);
             return res.status(500).json({ error: err.message }); 
         }
-        console.log(`Leaderboard result [${type}, ${lang}]: ${rows?.length || 0} rows`);
+        console.log(`Leaderboard result [${type}, ${lang}, ${mode}]: ${rows?.length || 0} rows`);
         res.json(rows || []);
     });
 });
@@ -253,6 +455,7 @@ app.get('/leaderboard/qualifies', (req, res) => {
     const score = parseInt(req.query.score, 10);
     const type = req.query.type === 'daily' ? 'daily' : 'alltime';
     const lang = req.query.lang || 'fi';
+    const mode = getScoreMode(req.query.mode);
 
     if (isNaN(score)) { return res.status(400).json({ error: 'Invalid score' }); }
 
@@ -261,11 +464,11 @@ app.get('/leaderboard/qualifies', (req, res) => {
     if (type === 'daily') {
         const now = new Date();
         const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
-        sql = `SELECT COUNT(*) as count FROM scores WHERE language = ? AND created_at >= ? AND score > ?`;
-        params = [lang, startOfDay, score];
+        sql = `SELECT COUNT(*) as count FROM scores WHERE language = ? AND mode = ? AND created_at >= ? AND score > ?`;
+        params = [lang, mode, startOfDay, score];
     } else {
-        sql = `SELECT COUNT(*) as count FROM scores WHERE language = ? AND score > ?`;
-        params = [lang, score];
+        sql = `SELECT COUNT(*) as count FROM scores WHERE language = ? AND mode = ? AND score > ?`;
+        params = [lang, mode, score];
     }
 
     scoresDb.get(sql, params, (err, row) => {
@@ -275,8 +478,13 @@ app.get('/leaderboard/qualifies', (req, res) => {
 });
 
 app.post('/scores', (req, res) => {
-    const { nickname, score, word_count, language } = req.body;
+    const { nickname, score, word_count, language, mode } = req.body;
     const lang = language || 'fi';
+    
+    if (mode === 'zen') {
+        return res.status(400).json({ error: 'Zen mode scores cannot be saved' });
+    }
+    const safeMode = getScoreMode(mode);
 
     if (!nickname || typeof score !== 'number' || typeof word_count !== 'number') {
         return res.status(400).json({ error: 'Invalid payload' });
@@ -286,8 +494,8 @@ app.post('/scores', (req, res) => {
     const created_at = Math.floor(Date.now() / 1000);
 
     scoresDb.run(
-        'INSERT INTO scores (nickname, score, word_count, language, created_at) VALUES (?, ?, ?, ?, ?)',
-        [cleanNickname, score, word_count, lang, created_at],
+        'INSERT INTO scores (nickname, score, word_count, language, mode, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+        [cleanNickname, score, word_count, lang, safeMode, created_at],
         function (err) {
             if (err) { return res.status(500).json({ error: err.message }); }
             res.json({ id: this.lastID });
