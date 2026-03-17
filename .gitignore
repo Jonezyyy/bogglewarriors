@@ -1,0 +1,17 @@
+.vs/CopilotSnapshots/93E5559806A18E44A8A392778F1A363B/8BF18375A7538D4F8606187048448797/BCCF42FB675C59536FEA01A54D234024
+node_modules/
+kaikki.org-dictionary-Finnish.jsonl
+check-db.js
+*.config
+/.vs/CopilotSnapshots
+/.vs/Boggle Warriors.slnx/copilot-chat
+
+# Visual Studio workspace/cache files
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Local installer artifacts
+images/*.msix

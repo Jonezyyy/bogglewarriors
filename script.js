@@ -220,6 +220,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 this.totalBoardWords = data.totalWords || data.words.length;
                 this.maxBoardScore = data.maxScore || 0;
                 this.boardStatsLoaded = true;
+                console.log(`[Zen] ${this.totalBoardWords} possible words:`, Array.from(this.validBoardWords).sort());
             } catch (error) {
                 console.error("Error analyzing board:", error);
                 this.boardStatsError = "Unavailable";

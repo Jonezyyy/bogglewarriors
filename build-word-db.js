@@ -51,83 +51,98 @@ function isValidForBoggle(word) {
 // Merges multiple JSONL entries for the same word (different POS)
 const wordData = new Map();
 
-// Parts of speech to exclude entirely
-const EXCLUDED_POS = new Set(['name', 'abbrev', 'character', 'symbol', 'punct']);
+// Parts of speech accepted for gameplay
+const ALLOWED_POS = new Set(['noun', 'verb', 'adj', 'adv', 'pron', 'num']);
+
+// Reject entries/forms marked with these tags
+const REJECT_TAGS = new Set([
+    'proper-noun',
+    'given-name',
+    'surname',
+    'place-name',
+    'archaic',
+    'obsolete',
+    'historical',
+    'dated',
+    'dialectal',
+    'regional',
+    'onomatopoeia'
+]);
+
+function hasRejectedTag(tags) {
+    if (!Array.isArray(tags)) return false;
+    return tags.some(tag => REJECT_TAGS.has(String(tag).toLowerCase()));
+}
+
+function normalizeWord(raw) {
+    if (typeof raw !== 'string') return null;
+    const word = raw.trim().toLowerCase();
+    return isValidForBoggle(word) ? word : null;
+}
+
+function upsertWord(word, updates = {}) {
+    if (!word) return;
+    const existing = wordData.get(word);
+    if (existing) {
+        if (updates.isBase) existing.isBase = true;
+        if (updates.isNominativePlural) existing.isNominativePlural = true;
+        if (updates.nominativePlural && !existing.nominativePlural) {
+            existing.nominativePlural = updates.nominativePlural;
+        }
+        return;
+    }
+
+    wordData.set(word, {
+        isBase: !!updates.isBase,
+        nominativePlural: updates.nominativePlural || null,
+        isNominativePlural: !!updates.isNominativePlural
+    });
+}
 
 function processEntry(entry) {
     // Support both Finnish-only dump and raw all-languages dump
     if (entry.lang_code && entry.lang_code !== 'fi') return;
 
-    // Skip proper nouns, abbreviations, letter names, symbols
-    if (EXCLUDED_POS.has(entry.pos)) return;
+    // Rule 2: accept only configured POS values
+    const pos = String(entry.pos || '').toLowerCase();
+    if (!ALLOWED_POS.has(pos)) return;
 
-    // Skip if the original word starts with a capital letter (proper noun / name)
-    if (entry.word && /^[A-ZÄÖÅ]/.test(entry.word)) return;
+    // Rule 3: reject by top-level tags
+    if (hasRejectedTag(entry.tags)) return;
 
-    // Skip if top-level tags mark this as an abbreviation
-    if (entry.tags && (entry.tags.includes('abbreviation') || entry.tags.includes('initialism'))) return;
+    // Accept lemma/base word from entry.word
+    const baseWord = normalizeWord(entry.word || '');
+    if (!baseWord) return;
 
-    const word = (entry.word || '').toLowerCase();
-    if (!isValidForBoggle(word)) return;
+    let nominativePlural = null;
 
-    const senses = entry.senses || [];
-    if (senses.length === 0) return;
+    if (Array.isArray(entry.forms)) {
+        for (const form of entry.forms) {
+            if (!form || hasRejectedTag(form.tags)) continue;
 
-    // Skip if all senses in this entry are letter/alphabet names
-    // (categories live at the sense level in kaikki.org dumps)
-    const isLetterNameEntry = senses.every(s => {
-        const cats = (s.categories || []).map(c => (typeof c === 'string' ? c : c.name || '').toLowerCase());
-        return cats.some(c => c.includes('latin letter') || c.includes('letter name') || c.includes('alphabet letter'));
-    });
-    if (isLetterNameEntry) return;
+            const tags = Array.isArray(form.tags)
+                ? form.tags.map(tag => String(tag).toLowerCase())
+                : [];
 
-    // Skip if all senses are marked as abbreviations or proper nouns
-    const hasUsableSense = senses.some(s =>
-        !s.tags || (!s.tags.includes('abbreviation') && !s.tags.includes('initialism') && !s.tags.includes('proper-noun'))
-    );
-    if (!hasUsableSense) return;
+            const isNomPluralForm = tags.includes('nominative') && tags.includes('plural');
+            const isCompSuperForm = (pos === 'adj' || pos === 'adv') &&
+                (tags.includes('comparative') || tags.includes('superlative'));
 
-    // A sense is "base" if it doesn't have form_of
-    const hasBaseSense = senses.some(s => !s.form_of || s.form_of.length === 0);
+            if (!isNomPluralForm && !isCompSuperForm) continue;
 
-    // Check if any sense is a nominative plural inflection
-    const isNomPlural = senses.some(s =>
-        s.form_of && s.form_of.length > 0 &&
-        s.tags && s.tags.includes('nominative') && s.tags.includes('plural')
-    );
+            const normalizedForm = normalizeWord(form.form || '');
+            if (!normalizedForm) continue;
 
-    // For base words: find nominative plural from the forms list
-    let nomPluralForm = null;
-    if (hasBaseSense && entry.forms) {
-        const form = entry.forms.find(f =>
-            f.tags && f.tags.includes('nominative') && f.tags.includes('plural') &&
-            !f.tags.includes('accusative') && !f.tags.includes('genitive') &&
-            f.form && f.form !== '-'
-        );
-        if (form) {
-            const plural = form.form.toLowerCase();
-            // Only store if the plural itself is valid for Boggle
-            if (isValidForBoggle(plural)) {
-                nomPluralForm = plural;
+            if (isNomPluralForm) {
+                if (!nominativePlural) nominativePlural = normalizedForm;
+                upsertWord(normalizedForm, { isNominativePlural: true });
+            } else {
+                upsertWord(normalizedForm);
             }
         }
     }
 
-    // Merge with existing data for this word
-    const existing = wordData.get(word);
-    if (existing) {
-        if (hasBaseSense) existing.isBase = true;
-        if (nomPluralForm && !existing.nominativePlural) {
-            existing.nominativePlural = nomPluralForm;
-        }
-        if (isNomPlural) existing.isNominativePlural = true;
-    } else {
-        wordData.set(word, {
-            isBase: hasBaseSense,
-            nominativePlural: nomPluralForm,
-            isNominativePlural: isNomPlural
-        });
-    }
+    upsertWord(baseWord, { isBase: true, nominativePlural });
 }
 
 // ── Main ───────────────────────────────────────────────────────────────
