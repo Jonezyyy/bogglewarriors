@@ -69,12 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("newGame").addEventListener("click", () => { 
                 this.tapSound.currentTime = 0; 
                 this.tapSound.play();
-                const isEndMode = this.newGameButton.classList.contains("end-mode");
-                if (isEndMode) {
-                    this.endGame("manual");
-                } else {
-                    this.startNewGame();
-                }
+                this.startNewGame();
             });
             document.getElementById("submitWord").addEventListener("click", () => { this.tapSound.currentTime = 0; this.tapSound.play(); this.submitWord(); });
 
@@ -189,8 +184,19 @@ document.addEventListener("DOMContentLoaded", () => {
             this.hasActiveGame = true;
             this.timerElement.textContent = "Zen";
             this.timerElement.style.color = "";
-            this.shuffleBoard();
+            this.boardElement.querySelectorAll(".tile").forEach(t => {
+                t.style.animationDelay = `${(Math.random() * 0.35).toFixed(2)}s`;
+                t.classList.add("shuffle-shake");
+            });
+            this.shuffleInterval = setInterval(() => this.shuffleBoard(), 100);
             this.updateModeUI();
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            this.boardElement.querySelectorAll(".tile").forEach(t => {
+                t.classList.remove("shuffle-shake");
+                t.style.animationDelay = "";
+            });
+            clearInterval(this.shuffleInterval);
+            this.shuffleBoard();
             await this.loadBoardAnalysis();
         }
 
@@ -690,15 +696,8 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         updateModeUI() {
-            const isZenGameActive = currentPlayMode === "zen" && this.hasActiveGame && !this.isGameOver;
-            
-            if (isZenGameActive) {
-                this.newGameButton.textContent = "End";
-                this.newGameButton.classList.add("end-mode");
-            } else {
-                this.newGameButton.textContent = "New";
-                this.newGameButton.classList.remove("end-mode");
-            }
+            this.newGameButton.textContent = "New";
+            this.newGameButton.classList.remove("end-mode");
 
             if (!this.hasActiveGame && !this.isGameOver) {
                 this.timerElement.textContent = currentPlayMode === "zen" ? "Zen" : "1:30";

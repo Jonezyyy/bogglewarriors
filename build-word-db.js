@@ -68,6 +68,25 @@ const MANUAL_BLOCKLIST = new Set([
     'enn', 'emi', 'aar',
     // Foreign/exotic loanwords and proper-concept words with no Wiktionary tags
     'his', 'lao', 'lee', 'mala', 'moa', 'psii', 'sial', 'rael',
+    // Abbreviations with no rejection tag in Wiktionary
+    'ely', 'esim', 'alv', 'asap', 'dna', 'amis', 'nti', 'insta',
+    // Musical note names (A♯, E♯)
+    'ais', 'eis',
+    // Foreign letter/currency/concept names
+    'tau', 'mem', 'lei', 'rial',
+    // Proper nouns slipping through tags
+    'italia', 'eeva',
+    // Invalid standalone words (prefixes, compounds, vulgar untagged)
+    'semi', 'saamamies', 'vitu', 'vitun',
+]);
+
+// Words that are always included regardless of tag rejection.
+// Use for valid words whose only Wiktionary entries are incidentally tagged colloquial/etc.
+const FORCE_ALLOWLIST = new Set([
+    'sei',   // saithe (fish) — only Wiktionary entry is tagged colloquial
+    'tissi', // breast (colloquial but widely used Finnish word)
+    'naku',  // naked (colloquial but widely used Finnish word)
+    'edam',  // Edam cheese — common food word
 ]);
 
 // ── Data accumulator ───────────────────────────────────────────────────
@@ -97,7 +116,10 @@ const REJECT_TAGS = new Set([
     'alternative',
     'form-of',
     'proscribed',
-    'rare'
+    'rare',
+    'colloquial',
+    'slang',
+    'familiar',
 ]);
 
 function hasRejectedTag(tags) {
@@ -149,7 +171,9 @@ function processEntry(entry) {
     if (!ALLOWED_POS.has(pos)) return;
 
     // Rule 3: reject if any sense-level tags match rejection tags
-    if (hasRejectedSenseTag(entry.senses)) return;
+    // (force-allowlisted words bypass this check)
+    const baseWordCheck = String(entry.word || '').trim().toLowerCase();
+    if (!FORCE_ALLOWLIST.has(baseWordCheck) && hasRejectedSenseTag(entry.senses)) return;
 
     // Accept lemma/base word from entry.word
     const baseWord = normalizeWord(entry.word || '');
