@@ -36,16 +36,20 @@ const MAX_LETTER_COUNT = {
     'u': 5, 'v': 2, 'y': 2, 'ä': 2, 'ö': 1
 };
 
+const FINNISH_VOWELS = new Set('aeiouäöy');
+
 function isValidForBoggle(word) {
     if (word.length < 3 || word.length > 16) return false;
+    let hasVowel = false;
     const counts = {};
     for (const ch of word) {
         if (!VALID_LETTERS.has(ch)) return false;
+        if (FINNISH_VOWELS.has(ch)) hasVowel = true;
         counts[ch] = (counts[ch] || 0) + 1;
         const max = MAX_LETTER_COUNT[ch];
         if (max !== undefined && counts[ch] > max) return false;
     }
-    return true;
+    return hasVowel;
 }
 
 // ── Data accumulator ───────────────────────────────────────────────────
@@ -67,7 +71,15 @@ const REJECT_TAGS = new Set([
     'dated',
     'dialectal',
     'regional',
-    'onomatopoeia'
+    'onomatopoeia',
+    'abbreviation',
+    'acronym',
+    'initialism',
+    'alt-of',
+    'alternative',
+    'colloquial',
+    'informal',
+    'slang'
 ]);
 
 function hasRejectedTag(tags) {
