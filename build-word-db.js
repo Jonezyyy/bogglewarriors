@@ -62,6 +62,10 @@ const MANUAL_BLOCKLIST = new Set([
     'kea',   // New Zealand parrot
     'tao',   // Chinese philosophical concept
     'tari',  // Himalayan goat, obscure loanword
+    // Latin letter names (English)
+    'vee', 'dee', 'ess', 'arr', 'ell', 'kay', 'cee', 'zee',
+    'pee', 'tee', 'gee', 'jay', 'eff', 'wye', 'aye', 'aitch',
+    'enn', 'emi', 'aar',
 ]);
 
 // ── Data accumulator ───────────────────────────────────────────────────
