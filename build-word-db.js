@@ -209,6 +209,10 @@ function writeToDb() {
                     nominative_plural TEXT,
                     is_nominative_plural INTEGER DEFAULT 0
                 )`);
+                db.run(`CREATE TABLE IF NOT EXISTS meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )`);
                 db.run('DELETE FROM finnish_words');
                 db.run('BEGIN TRANSACTION');
 
@@ -246,6 +250,10 @@ function writeToDb() {
                     inserted += pluralsAdded;
                     console.log(`  (${pluralsAdded} nominative plurals added as standalone entries)`);
                     db.run('COMMIT', () => {
+                        const buildTime = new Date().toISOString();
+                        db.run(`INSERT OR REPLACE INTO meta (key, value) VALUES ('version', ?)`, [buildTime]);
+                        db.run(`INSERT OR REPLACE INTO meta (key, value) VALUES ('word_count', ?)`, [String(inserted)]);
+                        console.log(`  DB version: ${buildTime}`);
                         console.log(`\r  Inserted ${inserted} words.`);
 
                         // Print stats

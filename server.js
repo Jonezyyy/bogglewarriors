@@ -219,6 +219,9 @@ const db = new sqlite3.Database(wordsDbPath, sqlite3.OPEN_READONLY, (err) => {
         process.exit(1);
     }
     console.log('Connected to words SQLite database');
+    db.get("SELECT value FROM meta WHERE key = 'version'", (err, row) => {
+        console.log(`Words DB version: ${row?.value ?? 'unknown'}`);
+    });
 });
 
 // Scores DB — persistent volume via SCORES_DB_PATH, falls back to local file
@@ -311,6 +314,13 @@ function startServer() {
         console.log(`Server is running on http://0.0.0.0:${PORT}`);
     });
 }
+
+app.get('/db-version', (req, res) => {
+    db.get("SELECT value FROM meta WHERE key = 'version'", (err, row) => {
+        if (err || !row) return res.json({ version: 'unknown' });
+        res.json({ version: row.value });
+    });
+});
 
 app.get('/validate-word/:word', (req, res) => {
     const word = req.params.word.toLowerCase();
