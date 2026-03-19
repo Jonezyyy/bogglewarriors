@@ -214,7 +214,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const response = await fetch(`${API}/board-analysis`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ letters: this.boardLetters, lang: currentLanguage })
+                    body: JSON.stringify({ letters: this.boardLetters, lang: currentLanguage, dict: currentDict })
                 });
 
                 if (!response.ok) {
@@ -654,7 +654,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const timeout = setTimeout(() => controller.abort(), 5000);
             try {
                 const response = await fetch(
-                    `https://bogglewarriors-production.up.railway.app/validate-word/${word}?lang=${currentLanguage}`,
+                    `https://bogglewarriors-production.up.railway.app/validate-word/${word}?lang=${currentLanguage}&dict=${currentDict}`,
                     { signal: controller.signal }
                 );
                 if (!response.ok) return { error: true, message: `Server error: ${response.status}` };
@@ -897,6 +897,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentLanguage = "fi";
     let currentPlayMode = "timed";
     let currentVisualMode = "solo";
+    let currentDict = "kaikki";
     let groupMode = false;
 
     function formatLbDate(unixSeconds) {
@@ -953,6 +954,12 @@ document.addEventListener("DOMContentLoaded", () => {
     function syncLanguageButtons() {
         document.querySelectorAll("[data-lang]").forEach(btn => {
             btn.classList.toggle("active", btn.dataset.lang === currentLanguage);
+        });
+    }
+
+    function syncDictButtons() {
+        document.querySelectorAll("[data-dict]").forEach(btn => {
+            btn.classList.toggle("active", btn.dataset.dict === currentDict);
         });
     }
 
@@ -1050,6 +1057,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 game.updateModeUI();
                 game.updateSidebar();
+                return;
+            }
+
+            if (btn.dataset.dict) {
+                currentDict = btn.dataset.dict;
+                syncDictButtons();
                 return;
             }
         });

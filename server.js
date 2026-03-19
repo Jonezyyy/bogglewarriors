@@ -2,6 +2,7 @@ import express from 'express';
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { readFileSync } from 'fs';
 import cors from 'cors';
 
 const app = express();
@@ -77,6 +78,42 @@ function isSupersededWord(word, metadataByWord) {
 function getScoreMode(value) {
     return value === 'unlimited' ? 'unlimited' : 'timed';
 }
+
+function buildSanakirjaCache() {
+    try {
+        const raw = JSON.parse(readFileSync(path.join(__dirname, 'sanakirja_boggle_plurals.json'), 'utf8'));
+        const metadataByWord = new Map();
+        const prefixes = new Set();
+        const VALID = /^[a-zäö]+$/;
+
+        const addWord = (word, meta) => {
+            metadataByWord.set(word, meta);
+            for (let i = 1; i <= word.length; i++) prefixes.add(word.slice(0, i));
+        };
+
+        for (const [baseWord, data] of Object.entries(raw)) {
+            const lword = baseWord.toLowerCase();
+            // Skip proper nouns (capitalized), wrong length, or non-Finnish chars
+            if (baseWord[0] !== baseWord[0].toLowerCase()) continue;
+            if (lword.length < 3 || lword.length > 16) continue;
+            if (!VALID.test(lword)) continue;
+
+            const plural = data.plural ? data.plural.toLowerCase() : '';
+            const validPlural = plural && plural.length >= 3 && plural.length <= 16 && VALID.test(plural) ? plural : null;
+
+            addWord(lword, { nominativePlural: validPlural, isNominativePlural: false });
+            if (validPlural) addWord(validPlural, { nominativePlural: null, isNominativePlural: true });
+        }
+
+        console.log(`Sanakirja.fi cache loaded: ${metadataByWord.size} words`);
+        return { metadataByWord, prefixes };
+    } catch (err) {
+        console.warn(`Could not load sanakirja_boggle_plurals.json: ${err.message}`);
+        return null;
+    }
+}
+
+const sanakirjaCache = buildSanakirjaCache();
 
 function normalizeBoardLetters(letters) {
     if (!Array.isArray(letters) || letters.length !== BOARD_CELLS) return null;
@@ -355,6 +392,12 @@ app.get('/validate-word/:word', (req, res) => {
             return res.json({ exists: false });
         }
 
+        if (req.query.dict === 'sanakirja' && sanakirjaCache) {
+            const meta = sanakirjaCache.metadataByWord.get(word);
+            if (!meta) return res.json({ exists: false });
+            return res.json({ exists: true, isInflection: false, nominativePlural: meta.nominativePlural, isNominativePlural: meta.isNominativePlural });
+        }
+
         db.get('SELECT * FROM finnish_words WHERE word = ?', [word], (err, row) => {
             if (err) {
                 console.error(`Finnish DB error [${word}]:`, err.message);
@@ -395,7 +438,8 @@ app.post('/board-analysis', async (req, res) => {
     }
 
     try {
-        const cache = await loadFinnishWordCache();
+        const dict = req.body.dict || 'kaikki';
+        const cache = (dict === 'sanakirja' && sanakirjaCache) ? sanakirjaCache : await loadFinnishWordCache();
         res.json(analyzeFinnishBoard(letters, cache));
     } catch (error) {
         console.error('Board analysis error:', error.message);
