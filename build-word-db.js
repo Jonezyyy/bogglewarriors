@@ -79,7 +79,8 @@ const REJECT_TAGS = new Set([
     'alternative',
     'colloquial',
     'informal',
-    'slang'
+    'slang',
+    'form-of'
 ]);
 
 function hasRejectedTag(tags) {
