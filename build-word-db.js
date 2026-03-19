@@ -52,6 +52,18 @@ function isValidForBoggle(word) {
     return hasVowel;
 }
 
+// ── Manual blocklist ─────────────────────────────────────────────────
+// Words to always exclude regardless of Wiktionary data.
+// Add words here and rebuild to remove them from the game.
+const MANUAL_BLOCKLIST = new Set([
+    'hra',   // abbreviation of herra (no tag in Wiktionary)
+    'kir',   // French apéritif
+    'teak',  // English/foreign loanword
+    'kea',   // New Zealand parrot
+    'tao',   // Chinese philosophical concept
+    'tari',  // Himalayan goat, obscure loanword
+]);
+
 // ── Data accumulator ───────────────────────────────────────────────────
 // Merges multiple JSONL entries for the same word (different POS)
 const wordData = new Map();
@@ -77,10 +89,9 @@ const REJECT_TAGS = new Set([
     'initialism',
     'alt-of',
     'alternative',
-    'colloquial',
-    'informal',
-    'slang',
-    'form-of'
+    'form-of',
+    'proscribed',
+    'rare'
 ]);
 
 function hasRejectedTag(tags) {
@@ -89,14 +100,18 @@ function hasRejectedTag(tags) {
 }
 
 function hasRejectedSenseTag(senses) {
-    if (!Array.isArray(senses)) return false;
-    return senses.some(sense => hasRejectedTag(sense?.tags));
+    if (!Array.isArray(senses) || senses.length === 0) return false;
+    // Only reject the entry if EVERY sense is marked with a rejection tag.
+    // This avoids throwing out common words (e.g. kissa, koira) that have one
+    // normal sense plus one colloquial/slang/alt-of secondary sense.
+    return senses.every(sense => hasRejectedTag(sense?.tags));
 }
 
 
 function normalizeWord(raw) {
     if (typeof raw !== 'string') return null;
     const word = raw.trim().toLowerCase();
+    if (MANUAL_BLOCKLIST.has(word)) return null;
     return isValidForBoggle(word) ? word : null;
 }
 
@@ -149,6 +164,15 @@ function processEntry(entry) {
 
             // noun: nominative plural only; adj: nominative plural + comparative/superlative
             if (!isNomPluralForm && !(pos === 'adj' && isCompSuper)) continue;
+
+            // Skip possessive-suffixed forms (e.g. rullasi, rullani) — they carry both
+            // 'nominative'+'plural' AND 'accusative' tags in Wiktionary
+            if (isNomPluralForm && tags.includes('accusative')) continue;
+
+            // Skip possessive suffix forms — no genuine Finnish nominative plural
+            // ends in these suffixes (-ni, -si, -mme, -nne, -nsa, -nsä)
+            const POSSESSIVE_SUFFIXES = ['ni', 'si', 'mme', 'nne', 'nsa', 'nsä'];
+            if (isNomPluralForm && POSSESSIVE_SUFFIXES.some(s => (form.form || '').toLowerCase().endsWith(s))) continue;
 
             const normalizedForm = normalizeWord(form.form || '');
             if (!normalizedForm) continue;

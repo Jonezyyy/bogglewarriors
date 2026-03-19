@@ -715,7 +715,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (currentPlayMode === "zen") {
                 boardStatsElement.classList.remove("hidden");
-                maxBoardScoreElement.textContent = this.boardStatsLoaded ? this.maxBoardScore : "...";
+                if (!this.boardStatsLoaded) {
+                    maxBoardScoreElement.textContent = "...";
+                } else {
+                    const foundBoardCount = Array.from(this.foundWords.keys())
+                        .filter(w => this.validBoardWords.has(w)).length;
+                    maxBoardScoreElement.textContent = `${foundBoardCount}/${this.totalBoardWords}`;
+                }
                 foundProgressElement.classList.add("hidden");
                 foundWordsHeadingElement.textContent = "Found Words";
             } else {
