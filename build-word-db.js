@@ -26,7 +26,7 @@ const __dirname = path.dirname(__filename);
 //       DESRIL, EIENUS, HIKNMU, AKAÄLÄ, SIOTMU,
 //       AJTOTO, EITOSS, ELYTTR, AKITMV, AILKVY, ALRNNU
 
-const VALID_LETTERS = new Set('adehijklmnoprstuvyäö');
+const VALID_LETTERS = new Set('abcdefghijklmnoprstuvyzäö');
 
 // Max occurrences = number of dice containing that letter
 const MAX_LETTER_COUNT = {
@@ -42,7 +42,8 @@ function isValidForBoggle(word) {
     for (const ch of word) {
         if (!VALID_LETTERS.has(ch)) return false;
         counts[ch] = (counts[ch] || 0) + 1;
-        if (counts[ch] > MAX_LETTER_COUNT[ch]) return false;
+        const max = MAX_LETTER_COUNT[ch];
+        if (max !== undefined && counts[ch] > max) return false;
     }
     return true;
 }
@@ -73,6 +74,12 @@ function hasRejectedTag(tags) {
     if (!Array.isArray(tags)) return false;
     return tags.some(tag => REJECT_TAGS.has(String(tag).toLowerCase()));
 }
+
+function hasRejectedSenseTag(senses) {
+    if (!Array.isArray(senses)) return false;
+    return senses.some(sense => hasRejectedTag(sense?.tags));
+}
+
 
 function normalizeWord(raw) {
     if (typeof raw !== 'string') return null;
@@ -107,8 +114,8 @@ function processEntry(entry) {
     const pos = String(entry.pos || '').toLowerCase();
     if (!ALLOWED_POS.has(pos)) return;
 
-    // Rule 3: reject by top-level tags
-    if (hasRejectedTag(entry.tags)) return;
+    // Rule 3: reject if any sense-level tags match rejection tags
+    if (hasRejectedSenseTag(entry.senses)) return;
 
     // Accept lemma/base word from entry.word
     const baseWord = normalizeWord(entry.word || '');
@@ -116,19 +123,19 @@ function processEntry(entry) {
 
     let nominativePlural = null;
 
-    if (Array.isArray(entry.forms)) {
+    const extractForms = pos === 'noun' || pos === 'adj';
+    if (extractForms && Array.isArray(entry.forms)) {
         for (const form of entry.forms) {
-            if (!form || hasRejectedTag(form.tags)) continue;
+            if (!form) continue;
 
             const tags = Array.isArray(form.tags)
                 ? form.tags.map(tag => String(tag).toLowerCase())
                 : [];
-
             const isNomPluralForm = tags.includes('nominative') && tags.includes('plural');
-            const isCompSuperForm = (pos === 'adj' || pos === 'adv') &&
-                (tags.includes('comparative') || tags.includes('superlative'));
+            const isCompSuper = tags.includes('comparative') || tags.includes('superlative');
 
-            if (!isNomPluralForm && !isCompSuperForm) continue;
+            // noun: nominative plural only; adj: nominative plural + comparative/superlative
+            if (!isNomPluralForm && !(pos === 'adj' && isCompSuper)) continue;
 
             const normalizedForm = normalizeWord(form.form || '');
             if (!normalizedForm) continue;
