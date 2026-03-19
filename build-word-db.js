@@ -66,6 +66,8 @@ const MANUAL_BLOCKLIST = new Set([
     'vee', 'dee', 'ess', 'arr', 'ell', 'kay', 'cee', 'zee',
     'pee', 'tee', 'gee', 'jay', 'eff', 'wye', 'aye', 'aitch',
     'enn', 'emi', 'aar',
+    // Foreign/exotic loanwords and proper-concept words with no Wiktionary tags
+    'his', 'lao', 'lee', 'mala', 'moa', 'psii', 'sial', 'rael',
 ]);
 
 // ── Data accumulator ───────────────────────────────────────────────────
