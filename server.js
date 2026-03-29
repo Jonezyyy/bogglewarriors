@@ -4,6 +4,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync } from 'fs';
 import cors from 'cors';
+import {
+    calculateWordScore, isSupersededWord, getScoreMode,
+    normalizeBoardLetters, analyzeFinnishBoard,
+    BOARD_CELLS, MAX_WORD_LENGTH
+} from './server-utils.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -16,8 +21,6 @@ app.use(express.json());
 
 const ADMIN_KEY = process.env.ADMIN_KEY;
 const BOARD_SIZE = 4;
-const BOARD_CELLS = BOARD_SIZE * BOARD_SIZE;
-const MAX_WORD_LENGTH = 16;
 
 let finnishWordCache = null;
 let finnishWordCachePromise = null;
@@ -64,21 +67,6 @@ function ensureScoreColumns(columns, callback) {
     addNextColumn();
 }
 
-function calculateWordScore(word) {
-    const length = word.length;
-    return length >= 8 ? 11 : length === 7 ? 5 : length === 6 ? 3 : length === 5 ? 2 : length >= 3 ? 1 : 0;
-}
-
-function isSupersededWord(word, metadataByWord) {
-    const meta = metadataByWord.get(word);
-    if (!meta || meta.isNominativePlural) return false;
-    return meta.nominativePlural !== null && metadataByWord.has(meta.nominativePlural);
-}
-
-function getScoreMode(value) {
-    return value === 'unlimited' ? 'unlimited' : 'timed';
-}
-
 function buildSanakirjaCache() {
     try {
         const raw = JSON.parse(readFileSync(path.join(__dirname, 'sanakirja_boggle_plurals.json'), 'utf8'));
@@ -114,42 +102,6 @@ function buildSanakirjaCache() {
 }
 
 const sanakirjaCache = buildSanakirjaCache();
-
-function normalizeBoardLetters(letters) {
-    if (!Array.isArray(letters) || letters.length !== BOARD_CELLS) return null;
-
-    const normalized = letters.map(letter => {
-        if (typeof letter !== 'string') return null;
-        const trimmed = letter.trim().toLowerCase();
-        if (!/^[a-zäö]$/.test(trimmed)) return null;
-        return trimmed;
-    });
-
-    return normalized.every(Boolean) ? normalized : null;
-}
-
-function buildBoardNeighbors() {
-    const neighbors = Array.from({ length: BOARD_CELLS }, () => []);
-
-    for (let row = 0; row < BOARD_SIZE; row++) {
-        for (let col = 0; col < BOARD_SIZE; col++) {
-            const index = row * BOARD_SIZE + col;
-            for (let rowOffset = -1; rowOffset <= 1; rowOffset++) {
-                for (let colOffset = -1; colOffset <= 1; colOffset++) {
-                    if (rowOffset === 0 && colOffset === 0) continue;
-                    const nextRow = row + rowOffset;
-                    const nextCol = col + colOffset;
-                    if (nextRow < 0 || nextRow >= BOARD_SIZE || nextCol < 0 || nextCol >= BOARD_SIZE) continue;
-                    neighbors[index].push(nextRow * BOARD_SIZE + nextCol);
-                }
-            }
-        }
-    }
-
-    return neighbors;
-}
-
-const boardNeighbors = buildBoardNeighbors();
 
 function loadFinnishWordCache() {
     if (finnishWordCache) {
@@ -198,55 +150,6 @@ function loadFinnishWordCache() {
     return finnishWordCachePromise;
 }
 
-function analyzeFinnishBoard(letters, cache) {
-    const foundWords = new Set();
-    const visited = new Array(BOARD_CELLS).fill(false);
-
-    function dfs(index, currentWord) {
-        const nextWord = currentWord + letters[index];
-        if (!cache.prefixes.has(nextWord)) return;
-
-        if (cache.metadataByWord.has(nextWord)) {
-            foundWords.add(nextWord);
-        }
-
-        if (nextWord.length >= MAX_WORD_LENGTH) return;
-
-        visited[index] = true;
-        for (const neighbor of boardNeighbors[index]) {
-            if (!visited[neighbor]) {
-                dfs(neighbor, nextWord);
-            }
-        }
-        visited[index] = false;
-    }
-
-    for (let index = 0; index < BOARD_CELLS; index++) {
-        dfs(index, '');
-    }
-
-    const foundMetadata = new Map();
-    const words = Array.from(foundWords).sort().map((word) => {
-        const meta = cache.metadataByWord.get(word);
-        foundMetadata.set(word, meta);
-        return {
-            word,
-            nominativePlural: meta.nominativePlural,
-            isNominativePlural: meta.isNominativePlural
-        };
-    });
-
-    const maxScore = words.reduce((total, entry) => {
-        return total + (isSupersededWord(entry.word, foundMetadata) ? 0 : calculateWordScore(entry.word));
-    }, 0);
-
-    return {
-        words,
-        totalWords: words.length,
-        maxScore
-    };
-}
-
 // Words DB — always the bundled repo file (read-only at runtime)
 const wordsDbPath = path.join(__dirname, 'words.db');
 console.log(`Words DB path: ${wordsDbPath}`);
@@ -262,7 +165,10 @@ const db = new sqlite3.Database(wordsDbPath, sqlite3.OPEN_READONLY, (err) => {
 });
 
 // Scores DB — persistent volume via SCORES_DB_PATH, falls back to local file
-const scoresDbPath = path.resolve(process.env.SCORES_DB_PATH || __dirname, 'scores.db');
+// Special-case ':memory:' so Vitest can run without touching disk.
+const scoresDbPath = process.env.SCORES_DB_PATH === ':memory:'
+    ? ':memory:'
+    : path.resolve(process.env.SCORES_DB_PATH || __dirname, 'scores.db');
 console.log(`Scores DB path: ${scoresDbPath}`);
 const scoresDb = new sqlite3.Database(scoresDbPath, (err) => {
     if (err) {
@@ -347,10 +253,13 @@ function migrateScoresFromLegacyDb() {
 }
 
 function startServer() {
+    if (process.env.VITEST) return; // tests use supertest — no real listener needed
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`Server is running on http://0.0.0.0:${PORT}`);
     });
 }
+
+export { app };
 
 app.get('/db-version', (req, res) => {
     db.get("SELECT value FROM meta WHERE key = 'version'", (err, row) => {
