@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boggle Warriors — Daily Challenge</title>
+    <link rel="icon" type="image/svg+xml" href="images/fav_icon.svg">
+    <link rel="stylesheet" href="styles.css?v=23">
+</head>
+<body>
+
+    <!-- Top bar — mirrors index.html structure -->
+    <div id="top-bar">
+        <a id="backBtn" class="icon-btn" href="index.html" aria-label="Back to game">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+            </svg>
+        </a>
+        <div id="timer">1:30</div>
+        <button id="leaderboardBtn" class="icon-btn" aria-label="Results">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 9H4a2 2 0 0 1-2-2V5h4"/>
+                <path d="M18 9h2a2 2 0 0 0 2-2V5h-4"/>
+                <path d="M6 5h12v6a6 6 0 0 1-12 0V5z"/>
+                <path d="M12 17v4"/>
+                <path d="M8 21h8"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Game area (same structure as index.html #game) -->
+    <div id="game" class="hidden">
+        <div id="board-container">
+            <div id="board-top-row">
+                <div id="selected-word">Get ready!</div>
+                <div class="board-top-spacer"></div>
+            </div>
+            <div id="board"></div>
+        </div>
+        <div id="buttons" class="daily-buttons">
+            <button id="submitWord">Submit</button>
+        </div>
+        <div id="sidebar">
+            <h3>Score: <span id="totalScore">0</span></h3>
+            <h3 id="foundWordsHeading">Found Words: 0</h3>
+            <div id="foundWordsContainer">
+                <div class="found-words-category">
+                    <h4>3-4 letters</h4>
+                    <ul id="foundWords-34" class="found-words-list"></ul>
+                </div>
+                <div class="found-words-category">
+                    <h4>5 letters</h4>
+                    <ul id="foundWords-5" class="found-words-list"></ul>
+                </div>
+                <div class="found-words-category">
+                    <h4>6 letters</h4>
+                    <ul id="foundWords-6" class="found-words-list"></ul>
+                </div>
+                <div class="found-words-category">
+                    <h4>7+ letters</h4>
+                    <ul id="foundWords-7plus" class="found-words-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results drawer (slides in from right, like leaderboard in index.html) -->
+    <div id="resultsOverlay" class="drawer-overlay">
+        <div class="drawer drawer-right">
+            <button class="drawer-close" id="resultsClose">&#10005;</button>
+            <h2>&#127881; Results</h2>
+            <p id="results-date" class="drawer-subtitle"></p>
+            <p id="results-summary" class="drawer-subtitle daily-summary"></p>
+            <p id="playing-as-label" class="drawer-subtitle"></p>
+            <div id="players-list"></div>
+            <p class="poll-notice">Updates every 30 seconds</p>
+            <div id="share-row">
+                <button id="shareBtn">&#128279; Copy link</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nickname modal (shown before game if no nickname stored) -->
+    <div id="nicknameOverlay" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>&#127581; Daily Challenge</h2>
+            <p>Enter your nickname to join today's challenge.</p>
+            <input id="nicknameInput" type="text" maxlength="20" placeholder="Nickname..." autocomplete="off" />
+            <div id="nicknameError"></div>
+            <div class="nickname-actions">
+                <button id="nicknameSubmit" disabled>Let's go!</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="daily.js?v=5"></script>
+</body>
+</html>

@@ -1,0 +1,259 @@
+/* ─── Daily Challenge Page Styles ───────────────────────────────────────── */
+
+#top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    gap: 12px;
+}
+
+#daily-title {
+    font-size: 1.1rem;
+    font-weight: bold;
+    flex: 1;
+    text-align: center;
+}
+
+#daily-date-label {
+    font-size: 0.85rem;
+    opacity: 0.75;
+    min-width: 90px;
+    text-align: right;
+}
+
+/* ─── Timer bar below board ──────────────────────────────────────────────── */
+#timer-bar {
+    display: flex;
+    justify-content: center;
+    margin-top: 4px;
+}
+
+#timer {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #fff;
+    background: rgba(0,0,0,0.45);
+    padding: 4px 20px;
+    border-radius: 8px;
+}
+
+#timer.warning {
+    color: #ff6b6b;
+}
+
+/* ─── Results screen ─────────────────────────────────────────────────────── */
+#results-screen {
+    max-width: 540px;
+    margin: 16px auto;
+    padding: 0 12px 32px;
+    color: #fff;
+}
+
+#results-header {
+    text-align: center;
+    margin-bottom: 12px;
+}
+
+#results-header h2 {
+    margin: 0 0 4px;
+    font-size: 1.5rem;
+}
+
+#results-header p {
+    margin: 2px 0;
+    opacity: 0.85;
+    font-size: 0.9rem;
+}
+
+#results-summary {
+    font-size: 1.05rem;
+    font-weight: bold;
+    opacity: 1 !important;
+    margin-top: 6px !important;
+}
+
+#change-nickname-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+    opacity: 0.85;
+}
+
+.text-btn {
+    background: none;
+    border: none;
+    color: #adf;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.85rem;
+    text-decoration: underline;
+}
+
+/* ─── Per-player word card ───────────────────────────────────────────────── */
+.player-card {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+}
+
+.player-card.is-self {
+    border: 2px solid rgba(100, 200, 255, 0.6);
+    background: rgba(100, 200, 255, 0.08);
+}
+
+.player-card-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.player-nickname {
+    font-weight: bold;
+    font-size: 1rem;
+    flex: 1;
+}
+
+.player-score {
+    font-size: 0.95rem;
+    opacity: 0.85;
+}
+
+.player-unique-count {
+    font-size: 0.8rem;
+    opacity: 0.65;
+}
+
+.player-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.word-chip {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    padding: 2px 7px;
+}
+
+.word-chip.stolen {
+    text-decoration: line-through;
+    opacity: 0.45;
+}
+
+/* ─── Share + poll notice ────────────────────────────────────────────────── */
+.poll-notice {
+    text-align: center;
+    font-size: 0.75rem;
+    opacity: 0.5;
+    margin: 8px 0 0;
+}
+
+#share-row {
+    text-align: center;
+    margin-top: 16px;
+}
+
+#shareBtn {
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+#shareBtn:hover {
+    background: rgba(255,255,255,0.25);
+}
+
+/* ─── Utility ────────────────────────────────────────────────────────────── */
+.hidden {
+    display: none !important;
+}
+
+/* ─── Reuse modal styles from main game (duplicated here for standalone page) */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal {
+    background: #1a1a2e;
+    color: #fff;
+    padding: 28px 24px 20px;
+    border-radius: 14px;
+    width: 90%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.modal h2 { margin: 0; font-size: 1.3rem; text-align: center; }
+.modal p  { margin: 0; font-size: 0.9rem; text-align: center; opacity: 0.85; }
+
+.modal input[type="text"] {
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.3);
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    font-size: 1rem;
+    outline: none;
+}
+
+.modal input[type="text"]::placeholder { opacity: 0.5; }
+
+.nickname-actions {
+    display: flex;
+    justify-content: center;
+}
+
+.nickname-actions button {
+    background: #4a9eff;
+    color: #fff;
+    border: none;
+    padding: 10px 28px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.nickname-actions button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.modal-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+#nicknameError, #changeNicknameError {
+    font-size: 0.8rem;
+    color: #ff8080;
+    min-height: 1em;
+    text-align: center;
+}

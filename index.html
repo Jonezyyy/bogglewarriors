@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Boggle Warriors</title>
     <link rel="icon" type="image/svg+xml" href="images/fav_icon.svg">
-    <link rel="stylesheet" href="styles.css?v=13">
+    <link rel="stylesheet" href="styles.css?v=23">
     <link rel="stylesheet" href="leaderboard.css?v=2">
 </head>
 <body>
@@ -37,7 +37,11 @@
     <!-- Main game -->
     <div id="game">
         <div id="board-container">
-            <div id="selected-word">Get ready!</div>
+            <div id="board-top-row">
+                <button id="revealBtn" class="hidden">Reveal</button>
+                <div id="selected-word">Get ready!</div>
+                <div class="board-top-spacer"></div>
+            </div>
             <div id="board"></div>
         </div>
         <div id="buttons">
@@ -53,19 +57,19 @@
             <h3 id="foundWordsHeading">Found Words: 0</h3>
             <div id="foundWordsContainer">
                 <div class="found-words-category">
-                    <h4>3-4 letters</h4>
+                    <h4 id="cat-heading-34">3-4 letters</h4>
                     <ul id="foundWords-34" class="found-words-list"></ul>
                 </div>
                 <div class="found-words-category">
-                    <h4>5 letters</h4>
+                    <h4 id="cat-heading-5">5 letters</h4>
                     <ul id="foundWords-5" class="found-words-list"></ul>
                 </div>
                 <div class="found-words-category">
-                    <h4>6 letters</h4>
+                    <h4 id="cat-heading-6">6 letters</h4>
                     <ul id="foundWords-6" class="found-words-list"></ul>
                 </div>
                 <div class="found-words-category">
-                    <h4>7+ letters</h4>
+                    <h4 id="cat-heading-7plus">7+ letters</h4>
                     <ul id="foundWords-7plus" class="found-words-list"></ul>
                 </div>
             </div>
@@ -121,15 +125,12 @@
                 </div>
             </div>
             <div class="settings-group">
-                <label class="settings-label">Word Source <span style="font-size:0.7em;opacity:0.6">(Finnish)</span></label>
-                <div class="settings-options">
-                    <button class="settings-option active" data-dict="kaikki">Kaikki.org</button>
-                    <button class="settings-option" data-dict="sanakirja">Sanakirja.fi</button>
-                </div>
+                <a href="daily.html" class="daily-menu-link">&#127581; Daily Challenge</a>
             </div>
+
         </div>
     </div>
 
-    <script src="script.js?v=19"></script>
+    <script src="script.js?v=28"></script>
 </body>
 </html>

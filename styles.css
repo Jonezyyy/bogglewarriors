@@ -12,7 +12,6 @@ body {
     background-image: url("images/background.jpg");
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
     background-repeat: no-repeat;
     margin: 0;
     padding: 0;
@@ -51,8 +50,9 @@ body {
     border-radius: 50%;
     border: none;
     background: rgba(0, 0, 0, 0.35);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    will-change: transform;
     color: white;
     cursor: pointer;
     display: flex;
@@ -93,6 +93,7 @@ body {
 #language-indicator {
     font-size: 12px;
     font-weight: bold;
+    line-height: 1;
     color: white;
     background: rgba(255, 255, 255, 0.2);
     padding: 4px 8px;
@@ -182,9 +183,143 @@ body {
     background-color: transparent;
 }
 
+/* ─── Drawer subtitle (used in results drawer) ──────────────────────────── */
+.drawer-subtitle {
+    margin: 0 0 4px;
+    opacity: 0.75;
+    font-size: 0.88rem;
+}
+
+.daily-summary {
+    font-weight: bold;
+    opacity: 1;
+    font-size: 1rem;
+    margin-bottom: 12px !important;
+}
+
+/* ─── Daily results — per-player card ───────────────────────────────────── */
+.player-card {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 10px 14px;
+    margin-bottom: 10px;
+}
+
+.player-card.is-self {
+    border: 2px solid rgba(100, 200, 255, 0.6);
+    background: rgba(100, 200, 255, 0.08);
+}
+
+.player-card-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.player-nickname {
+    font-weight: bold;
+    font-size: 1rem;
+    flex: 1;
+}
+
+.player-score {
+    font-size: 0.95rem;
+    opacity: 0.85;
+}
+
+.player-unique-count {
+    font-size: 0.8rem;
+    opacity: 0.65;
+}
+
+.player-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 0.85rem;
+}
+
+.word-chip {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    padding: 2px 7px;
+}
+
+.word-chip.stolen {
+    text-decoration: line-through;
+    opacity: 0.45;
+}
+
+/* ─── Daily results — misc ───────────────────────────────────────────────── */
+#change-nickname-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    font-size: 0.9rem;
+    opacity: 0.85;
+}
+
+.text-btn {
+    background: none;
+    border: none;
+    color: #adf;
+    cursor: pointer;
+    padding: 0;
+    font-size: 0.85rem;
+    text-decoration: underline;
+}
+
+.poll-notice {
+    text-align: center;
+    font-size: 0.75rem;
+    opacity: 0.5;
+    margin: 8px 0 0;
+}
+
+#share-row {
+    text-align: center;
+    margin-top: 16px;
+}
+
+#shareBtn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    padding: 8px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+#shareBtn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
 /* ─── Settings overlay ───────────────────────────────────────────────────── */
 .settings-group {
     margin-bottom: 22px;
+}
+
+.daily-menu-link {
+    display: block;
+    width: 100%;
+    height: 44px;
+    line-height: 44px;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s;
+}
+
+.daily-menu-link:hover {
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .settings-label {
@@ -359,6 +494,7 @@ body {
         0 8px 10px rgba(0,0,0,0.35);
     text-shadow: 0 -1px 2px rgba(0,0,0,0.3);
     transition: transform 0.08s, box-shadow 0.08s;
+    will-change: transform;
 }
 
 .tile:active {
@@ -406,6 +542,7 @@ body {
 
 .shuffle-shake {
     animation: shuffleShake 0.3s both infinite;
+    will-change: transform;
 }
 
 /* ─── Correct Word Animation ─────────────────────────────────────────────── */
@@ -504,6 +641,15 @@ body {
     flex-wrap: wrap;
 }
 
+/* Daily mode: single full-width submit button */
+.daily-buttons {
+    width: 100%;
+}
+
+.daily-buttons #submitWord {
+    width: 100% !important;
+}
+
 button {
     cursor: pointer;
     border: none;
@@ -571,6 +717,53 @@ button {
         0 3px 6px rgba(0,0,0,0.3);
 }
 #submitWord { width: 220px; font-size: 26px; }
+#board-top-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+#board-top-row #selected-word {
+    flex: 1;
+    text-align: center;
+}
+
+.board-top-spacer {
+    flex-shrink: 0;
+    visibility: hidden;
+    font-size: 12px;
+    padding: 4px 8px;
+    min-width: calc(2 * 8px + 3ch); /* matches #revealBtn padding + ~"Reveal" text */
+}
+
+#revealBtn {
+    height: auto;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+    color: white;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 4px 8px;
+    border-radius: 6px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    transition: background 0.15s, transform 0.08s;
+}
+
+#revealBtn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+#revealBtn:active {
+    transform: scale(0.95);
+}
+
+li.missed {
+    color: rgba(255, 255, 255, 0.4);
+    font-style: italic;
+    font-size: 14px;
+}
 #endRunBtn {
     width: 160px;
     font-size: 24px;

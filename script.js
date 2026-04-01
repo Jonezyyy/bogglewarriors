@@ -24,6 +24,10 @@ document.addEventListener("DOMContentLoaded", () => {
             this.incorrectAnswerSound = new Audio("sounds/incorrect_answer.mp3");
             this.tapSound = new Audio("sounds/tap.m4a");
             this.tapSound.volume = 0.5;
+            this.timeUpSound.preload = "auto";
+            this.correctAnswerSound.preload = "auto";
+            this.incorrectAnswerSound.preload = "auto";
+            this.tapSound.preload = "auto";
 
             // Game state
             this.timeLeft = 90;
@@ -41,6 +45,10 @@ document.addEventListener("DOMContentLoaded", () => {
             this.isDragging = false;
             this.dragMoved = false;
             this.touchMoved = false;
+            this._rafPending = false;
+            this._tileCenters = [];       // cached centers matching selectedTiles
+            this._boardRect = null;        // cached board bounding rect
+            this._boardResizeObserver = null;
             this.swipeCanvas = null;
             this.swipeCtx = null;
             this.pointerX = 0;
@@ -48,11 +56,14 @@ document.addEventListener("DOMContentLoaded", () => {
             this.pointerActive = false;
             this.boardLetters = [];
             this.validBoardWords = new Set();
+            this.validBoardWordsMetadata = new Map();
             this.totalBoardWords = 0;
             this.maxBoardScore = 0;
             this.boardStatsLoaded = false;
             this.boardStatsError = null;
             this.hasActiveGame = false;
+            this.isRevealed = false;
+            this.revealBtn = document.getElementById("revealBtn");
 
             // Initialize
             this.bindEvents();
@@ -72,6 +83,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 this.startNewGame();
             });
             document.getElementById("submitWord").addEventListener("click", () => { this.tapSound.currentTime = 0; this.tapSound.play(); this.submitWord(); });
+            document.getElementById("revealBtn").addEventListener("click", () => this.revealMissedWords());
 
             // Swipe / drag selection
             this.boardElement.addEventListener("mousedown", (e) => this.onMouseDown(e));
@@ -81,19 +93,26 @@ document.addEventListener("DOMContentLoaded", () => {
             this.boardElement.addEventListener("touchmove",  (e) => this.onTouchMove(e),  { passive: false });
             this.boardElement.addEventListener("touchend",   (e) => this.onTouchEnd(e));
             document.addEventListener("touchstart", (e) => this.onOutsideTouchStart(e), { passive: true });
+
+            // Unlock audio context on first touch (required by iOS/Android)
+            document.addEventListener("touchstart", () => {
+                [this.timeUpSound, this.correctAnswerSound, this.incorrectAnswerSound, this.tapSound]
+                    .forEach(a => { a.play().then(() => a.pause()).catch(() => {}); });
+            }, { once: true });
         }
 
         handleOutsideClick(event) {
             if (this.isGameOver) return;
-            const isClickInsideGame = this.boardElement.contains(event.target) ||
-                                      event.target.closest("#newGame") ||
-                                      event.target.closest("#submitWord") ||
-                                      event.target.closest("#endRunBtn") ||
-                                      event.target.closest("#leaderboardBtn") ||
-                                      event.target.closest("#hamburgerBtn") ||
-                                      event.target.closest(".modal-overlay") ||
-                                      event.target.closest(".drawer-overlay");
-            if (isClickInsideGame) {
+            // Only clear selection if click is truly outside the board and not on a tile or button
+            const isClickInsideBoard = this.boardElement.contains(event.target);
+            const isClickOnButton = event.target.closest("#newGame") ||
+                                    event.target.closest("#submitWord") ||
+                                    event.target.closest("#endRunBtn") ||
+                                    event.target.closest("#leaderboardBtn") ||
+                                    event.target.closest("#hamburgerBtn") ||
+                                    event.target.closest(".modal-overlay") ||
+                                    event.target.closest(".drawer-overlay");
+            if (!isClickInsideBoard && !isClickOnButton) {
                 this.resetSelectedTiles();
                 this.currentWord = [];
                 this.selectedTiles = [];
@@ -141,11 +160,16 @@ document.addEventListener("DOMContentLoaded", () => {
             this.dragMoved = false;
             this.touchMoved = false;
             this.validBoardWords = new Set();
+            this.validBoardWordsMetadata = new Map();
             this.totalBoardWords = 0;
             this.maxBoardScore = 0;
             this.boardStatsLoaded = false;
             this.boardStatsError = null;
             this.hasActiveGame = false;
+            this.isRevealed = false;
+            this.revealBtn.textContent = "Reveal";
+            this.revealBtn.classList.add("hidden");
+            this.sidebarElement.querySelectorAll("li.missed").forEach(li => li.remove());
             this.timerElement.style.color = "";
             this.clearMessage();
             this.boardElement.querySelectorAll(".tile span").forEach(span => {
@@ -168,7 +192,7 @@ document.addEventListener("DOMContentLoaded", () => {
             });
             let countdown = 3;
             this.timerElement.textContent = countdown;
-            this.shuffleInterval = setInterval(() => this.shuffleBoard(), 100);
+            this.shuffleInterval = setInterval(() => this.shuffleBoard(), 300);
             this.countdownInterval = setInterval(() => {
                 countdown--;
                 if (countdown <= 0) {
@@ -188,7 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 t.style.animationDelay = `${(Math.random() * 0.35).toFixed(2)}s`;
                 t.classList.add("shuffle-shake");
             });
-            this.shuffleInterval = setInterval(() => this.shuffleBoard(), 100);
+            this.shuffleInterval = setInterval(() => this.shuffleBoard(), 300);
             this.updateModeUI();
             await new Promise(resolve => setTimeout(resolve, 2000));
             this.boardElement.querySelectorAll(".tile").forEach(t => {
@@ -201,14 +225,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         async loadBoardAnalysis() {
-            if (currentPlayMode !== "zen" || currentLanguage !== "fi") return;
+            if (currentLanguage !== "fi") return;
 
             this.validBoardWords = new Set();
+            this.validBoardWordsMetadata = new Map();
             this.totalBoardWords = 0;
             this.maxBoardScore = 0;
             this.boardStatsLoaded = false;
             this.boardStatsError = null;
-            this.updateSidebar();
+            if (currentPlayMode === "zen") this.updateSidebar();
 
             try {
                 const response = await fetch(`${API}/board-analysis`, {
@@ -223,15 +248,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const data = await response.json();
                 this.validBoardWords = new Set(data.words.map(entry => entry.word));
+                this.validBoardWordsMetadata = new Map(data.words.map(entry => [
+                    entry.word,
+                    { nominativePlural: entry.nominativePlural, isNominativePlural: entry.isNominativePlural }
+                ]));
                 this.totalBoardWords = data.totalWords || data.words.length;
                 this.maxBoardScore = data.maxScore || 0;
                 this.boardStatsLoaded = true;
-                console.log(`[Zen] ${this.totalBoardWords} possible words:`, Array.from(this.validBoardWords).sort());
+                console.log(`[Board] ${this.totalBoardWords} possible words loaded for local validation`);
             } catch (error) {
                 console.error("Error analyzing board:", error);
                 this.boardStatsError = "Unavailable";
             } finally {
-                this.updateSidebar();
+                if (currentPlayMode === "zen") this.updateSidebar();
+                this.updateRevealBtn();
             }
         }
 
@@ -289,7 +319,52 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             this.updateModeUI();
+            if (currentLanguage === "fi") {
+                if (this.boardStatsLoaded) {
+                    // zen game ended with board already analyzed — show reveal immediately
+                    this.updateRevealBtn();
+                } else {
+                    // timed mode: kick off board analysis post-game so reveal becomes available
+                    this.loadBoardAnalysis();
+                }
+            }
             checkAndPromptScore(this.calculateTotalScore(), this.foundWords.size, currentPlayMode);
+        }
+
+        updateRevealBtn() {
+            const shouldShow = this.boardStatsLoaded &&
+                (this.isGameOver || currentPlayMode === "zen");
+            this.revealBtn.classList.toggle("hidden", !shouldShow);
+        }
+
+        revealMissedWords() {
+            if (!this.boardStatsLoaded) return;
+
+            // Remove previously inserted missed words
+            this.sidebarElement.querySelectorAll("li.missed").forEach(li => li.remove());
+
+            if (this.isRevealed) {
+                this.revealBtn.textContent = "Reveal";
+                this.isRevealed = false;
+                return;
+            }
+
+            const missed = Array.from(this.validBoardWords)
+                .filter(w => !this.foundWords.has(w))
+                .sort();
+
+            missed.forEach(word => {
+                const len = word.length;
+                const listId = len <= 4 ? "foundWords-34" : len === 5 ? "foundWords-5" : len === 6 ? "foundWords-6" : "foundWords-7plus";
+                const li = document.createElement("li");
+                li.textContent = word;
+                li.classList.add("missed");
+                li.dataset.word = word;
+                document.getElementById(listId).appendChild(li);
+            });
+
+            this.revealBtn.textContent = "Hide";
+            this.isRevealed = true;
         }
 
 
@@ -330,6 +405,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const span = document.createElement("span");
             span.textContent = letter;
             tile.appendChild(span);
+            tile._row = row;
+            tile._col = col;
             tile.dataset.row = row;
             tile.dataset.col = col;
             return tile;
@@ -349,6 +426,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Remove it and everything after it
                 const removed = this.selectedTiles.splice(idx);
                 this.currentWord.splice(idx);
+                this._tileCenters.splice(idx);
                 removed.forEach(t => t.classList.remove("selected"));
                 this.updateSelectedWordDisplay();
                 return;
@@ -359,6 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
             tile.classList.add("selected");
             this.currentWord.push(tile.textContent);
             this.selectedTiles.push(tile);
+            this._tileCenters.push(this._centerOf(tile));
             this.tapSound.currentTime = 0;
             this.tapSound.play();
             this.updateSelectedWordDisplay();
@@ -368,8 +447,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (this.selectedTiles.length === 0) return true;
             const last = this.selectedTiles[this.selectedTiles.length - 1];
             return (
-                Math.abs(parseInt(last.dataset.row) - parseInt(tile.dataset.row)) <= 1 &&
-                Math.abs(parseInt(last.dataset.col) - parseInt(tile.dataset.col)) <= 1
+                Math.abs(last._row - tile._row) <= 1 &&
+                Math.abs(last._col - tile._col) <= 1
             );
         }
 
@@ -439,11 +518,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const touch = e.touches[0];
             this.pointerX = touch.clientX;
             this.pointerY = touch.clientY;
-            this.drawSelectionPath();
             const tile = this.tileAtPoint(touch.clientX, touch.clientY);
             const lenBefore = this.selectedTiles.length;
             this.swipeToTile(tile);
             if (this.selectedTiles.length !== lenBefore) this.touchMoved = true;
+            if (!this._rafPending) {
+                this._rafPending = true;
+                requestAnimationFrame(() => {
+                    this.drawSelectionPath();
+                    this._rafPending = false;
+                });
+            }
         }
 
         onTouchEnd(e) {
@@ -487,6 +572,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (tile === secondToLast) {
                 const removed = this.selectedTiles.pop();
                 this.currentWord.pop();
+                this._tileCenters.pop();
                 removed.classList.remove("selected");
                 this.updateSelectedWordDisplay();
                 return;
@@ -501,6 +587,7 @@ document.addEventListener("DOMContentLoaded", () => {
             tile.classList.add("selected");
             this.currentWord.push(tile.textContent);
             this.selectedTiles.push(tile);
+            this._tileCenters.push(this._centerOf(tile));
             this.tapSound.currentTime = 0;
             this.tapSound.play();
             this.updateSelectedWordDisplay();
@@ -597,7 +684,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     this.showMessage(`+${points} points`, "#00dd00", 2000);
                 }
                 this.selectedWordElement.classList.add('points-popup');
-                this.updateSidebar();
+                this._appendWordToSidebar(wordLower);
                 this.invalidWordSubmitted = false;
 
                 // Reset tiles after animation completes
@@ -650,6 +737,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Returns { exists, isInflection, nominativePlural, isNominativePlural } or { error: true, message }
         async validateWord(word) {
+            const wordLower = word.toLowerCase();
+            // Fast local validation if board analysis is ready
+            if (this.boardStatsLoaded) {
+                const meta = this.validBoardWordsMetadata.get(wordLower);
+                if (meta) {
+                    return { exists: true, isInflection: false, nominativePlural: meta.nominativePlural, isNominativePlural: meta.isNominativePlural };
+                }
+                return { exists: false };
+            }
+            // Fallback to server if board analysis not yet ready
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 5000);
             try {
@@ -684,14 +781,12 @@ document.addEventListener("DOMContentLoaded", () => {
         getFoundProgressText() {
             if (this.boardStatsError) return this.boardStatsError;
             if (!this.boardStatsLoaded) return "Calculating...";
-
             const foundCount = Array.from(this.foundWords.keys())
                 .filter(word => this.validBoardWords.has(word))
                 .length;
             const percentage = this.totalBoardWords === 0
                 ? 0
                 : Math.round((foundCount / this.totalBoardWords) * 100);
-
             return `${percentage}% (${foundCount} / ${this.totalBoardWords} words)`;
         }
 
@@ -716,16 +811,47 @@ document.addEventListener("DOMContentLoaded", () => {
                 boardStatsElement.classList.remove("hidden");
                 if (!this.boardStatsLoaded) {
                     maxBoardScoreElement.textContent = "...";
+                    document.getElementById("cat-heading-34").textContent = "3-4 letters";
+                    document.getElementById("cat-heading-5").textContent = "5 letters";
+                    document.getElementById("cat-heading-6").textContent = "6 letters";
+                    document.getElementById("cat-heading-7plus").textContent = "7+ letters";
                 } else {
                     const foundBoardCount = Array.from(this.foundWords.keys())
                         .filter(w => this.validBoardWords.has(w)).length;
                     maxBoardScoreElement.textContent = `${foundBoardCount}/${this.totalBoardWords}`;
+
+                    // Per-category totals from validBoardWords
+                    let total34 = 0, total5 = 0, total6 = 0, total7 = 0;
+                    let found34 = 0, found5 = 0, found6 = 0, found7 = 0;
+                    for (const w of this.validBoardWords) {
+                        const l = w.length;
+                        if (l <= 4) total34++;
+                        else if (l === 5) total5++;
+                        else if (l === 6) total6++;
+                        else total7++;
+                    }
+                    for (const w of this.foundWords.keys()) {
+                        if (!this.validBoardWords.has(w)) continue;
+                        const l = w.length;
+                        if (l <= 4) found34++;
+                        else if (l === 5) found5++;
+                        else if (l === 6) found6++;
+                        else found7++;
+                    }
+                    document.getElementById("cat-heading-34").textContent = `3-4 letters (${found34}/${total34})`;
+                    document.getElementById("cat-heading-5").textContent = `5 letters (${found5}/${total5})`;
+                    document.getElementById("cat-heading-6").textContent = `6 letters (${found6}/${total6})`;
+                    document.getElementById("cat-heading-7plus").textContent = `7+ letters (${found7}/${total7})`;
                 }
                 foundProgressElement.classList.add("hidden");
                 foundWordsHeadingElement.textContent = "Found Words";
             } else {
                 boardStatsElement.classList.add("hidden");
                 foundWordsHeadingElement.textContent = `Found Words: ${foundWordsCount}`;
+                document.getElementById("cat-heading-34").textContent = "3-4 letters";
+                document.getElementById("cat-heading-5").textContent = "5 letters";
+                document.getElementById("cat-heading-6").textContent = "6 letters";
+                document.getElementById("cat-heading-7plus").textContent = "7+ letters";
             }
 
             // Organize found words by letter count
@@ -738,8 +864,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 const wordLen = word.length;
                 const score = this.calculateScore(word);
                 const displayText = this.isSuperseded(word) 
-                    ? `<li><s>${word} - 0</s></li>` 
-                    : `<li>${word} - ${score}</li>`;
+                    ? `<li data-word="${word}"><s>${word} - 0</s></li>` 
+                    : `<li data-word="${word}">${word} - ${score}</li>`;
 
                 if (wordLen === 3 || wordLen === 4) {
                     words34.push(displayText);
@@ -756,6 +882,63 @@ document.addEventListener("DOMContentLoaded", () => {
             document.getElementById("foundWords-5").innerHTML = words5.join('');
             document.getElementById("foundWords-6").innerHTML = words6.join('');
             document.getElementById("foundWords-7plus").innerHTML = words7plus.join('');
+        }
+
+        _appendWordToSidebar(wordLower) {
+            document.getElementById("totalScore").textContent = this.calculateTotalScore();
+
+            if (currentPlayMode === "zen") {
+                if (this.boardStatsLoaded) {
+                    const foundBoardCount = Array.from(this.foundWords.keys())
+                        .filter(w => this.validBoardWords.has(w)).length;
+                    document.getElementById("maxBoardScore").textContent = `${foundBoardCount}/${this.totalBoardWords}`;
+
+                    let total34 = 0, total5 = 0, total6 = 0, total7 = 0;
+                    let found34 = 0, found5 = 0, found6 = 0, found7 = 0;
+                    for (const w of this.validBoardWords) {
+                        const l = w.length;
+                        if (l <= 4) total34++;
+                        else if (l === 5) total5++;
+                        else if (l === 6) total6++;
+                        else total7++;
+                    }
+                    for (const w of this.foundWords.keys()) {
+                        if (!this.validBoardWords.has(w)) continue;
+                        const l = w.length;
+                        if (l <= 4) found34++;
+                        else if (l === 5) found5++;
+                        else if (l === 6) found6++;
+                        else found7++;
+                    }
+                    document.getElementById("cat-heading-34").textContent = `3-4 letters (${found34}/${total34})`;
+                    document.getElementById("cat-heading-5").textContent = `5 letters (${found5}/${total5})`;
+                    document.getElementById("cat-heading-6").textContent = `6 letters (${found6}/${total6})`;
+                    document.getElementById("cat-heading-7plus").textContent = `7+ letters (${found7}/${total7})`;
+                }
+            } else {
+                document.getElementById("foundWordsHeading").textContent = `Found Words: ${this.foundWords.size}`;
+            }
+
+            // If this word is a plural, strikethrough the base word's existing <li>
+            const meta = this.foundWords.get(wordLower);
+            if (meta && meta.isNominativePlural) {
+                for (const [w, m] of this.foundWords.entries()) {
+                    if (w !== wordLower && m.nominativePlural === wordLower) {
+                        const baseLi = this.sidebarElement.querySelector(`li[data-word="${w}"]`);
+                        if (baseLi) baseLi.innerHTML = `<s>${w} - 0</s>`;
+                        break;
+                    }
+                }
+            }
+
+            // Prepend the new <li>
+            const score = this.calculateScore(wordLower);
+            const li = document.createElement('li');
+            li.dataset.word = wordLower;
+            li.innerHTML = this.isSuperseded(wordLower) ? `<s>${wordLower} - 0</s>` : `${wordLower} - ${score}`;
+            const len = wordLower.length;
+            const listId = len <= 4 ? 'foundWords-34' : len === 5 ? 'foundWords-5' : len === 6 ? 'foundWords-6' : 'foundWords-7plus';
+            document.getElementById(listId).prepend(li);
         }
 
         calculateScore(word) {
@@ -777,7 +960,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         resetSelectedTiles() {
             this.boardElement.querySelectorAll(".selected").forEach(t => t.classList.remove("selected"));
-            if (this.swipeCanvas) this.swipeCanvas.width = this.swipeCanvas.width; // clears canvas
+            this._tileCenters = [];
+            if (this.swipeCanvas && this.swipeCtx) {
+                this.swipeCtx.clearRect(0, 0, this.swipeCanvas.width, this.swipeCanvas.height);
+            }
         }
 
         setupSwipeCanvas() {
@@ -785,29 +971,46 @@ document.addEventListener("DOMContentLoaded", () => {
             if (old) old.remove();
             const canvas = document.createElement('canvas');
             canvas.classList.add('swipe-canvas');
-            this.boardElement.appendChild(canvas);
+            // Insert as first child so tiles are always above
+            this.boardElement.insertBefore(canvas, this.boardElement.firstChild);
             this.swipeCanvas = canvas;
             this.swipeCtx = canvas.getContext('2d');
+
+            this._boardRect = this.boardElement.getBoundingClientRect();
+            if (this._boardResizeObserver) this._boardResizeObserver.disconnect();
+            this._boardResizeObserver = new ResizeObserver(() => {
+                this._boardRect = this.boardElement.getBoundingClientRect();
+                if (this.selectedTiles.length > 0) {
+                    this._tileCenters = this.selectedTiles.map(t => this._centerOf(t));
+                }
+            });
+            this._boardResizeObserver.observe(this.boardElement);
+        }
+
+        _centerOf(tile) {
+            const r = tile.getBoundingClientRect();
+            const b = this._boardRect;
+            return { x: r.left - b.left + r.width * 0.5, y: r.top - b.top + r.height * 0.5 };
         }
 
         drawSelectionPath() {
             if (!this.swipeCanvas || this.selectedTiles.length === 0) {
-                if (this.swipeCanvas) this.swipeCanvas.width = this.swipeCanvas.width;
+                if (this.swipeCanvas && this.swipeCtx) {
+                    this.swipeCtx.clearRect(0, 0, this.swipeCanvas.width, this.swipeCanvas.height);
+                }
                 return;
             }
             const canvas = this.swipeCanvas;
             const ctx = this.swipeCtx;
-            const boardRect = this.boardElement.getBoundingClientRect();
-            canvas.width  = boardRect.width;
-            canvas.height = boardRect.height;
+            const boardRect = this._boardRect || this.boardElement.getBoundingClientRect();
+            if (canvas.width !== boardRect.width || canvas.height !== boardRect.height) {
+                canvas.width  = boardRect.width;
+                canvas.height = boardRect.height;
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
 
-            const centers = this.selectedTiles.map(tile => {
-                const r = tile.getBoundingClientRect();
-                return {
-                    x: r.left - boardRect.left + r.width  / 2,
-                    y: r.top  - boardRect.top  + r.height / 2
-                };
-            });
+            const centers = this._tileCenters; // pre-cached, no layout reflow
 
             // Connecting line between committed tiles
             if (centers.length >= 2) {
@@ -897,7 +1100,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentLanguage = "fi";
     let currentPlayMode = "timed";
     let currentVisualMode = "solo";
-    let currentDict = "kaikki";
+    let currentDict = "sanakirja";
     let groupMode = false;
 
     function formatLbDate(unixSeconds) {
@@ -954,12 +1157,6 @@ document.addEventListener("DOMContentLoaded", () => {
     function syncLanguageButtons() {
         document.querySelectorAll("[data-lang]").forEach(btn => {
             btn.classList.toggle("active", btn.dataset.lang === currentLanguage);
-        });
-    }
-
-    function syncDictButtons() {
-        document.querySelectorAll("[data-dict]").forEach(btn => {
-            btn.classList.toggle("active", btn.dataset.dict === currentDict);
         });
     }
 
@@ -1060,11 +1257,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
 
-            if (btn.dataset.dict) {
-                currentDict = btn.dataset.dict;
-                syncDictButtons();
-                return;
-            }
         });
     });
 
