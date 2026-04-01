@@ -9,6 +9,7 @@ import {
     normalizeBoardLetters, analyzeFinnishBoard,
     BOARD_CELLS, MAX_WORD_LENGTH
 } from './server-utils.js';
+import { registerDailyRoutes } from './server-daily.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -197,6 +198,34 @@ function initializeScoresDb() {
                 ensureScoreColumns(columns, migrateScoresFromLegacyDb);
             });
         });
+
+        scoresDb.run(`CREATE TABLE IF NOT EXISTS daily_boards (
+            date          TEXT    PRIMARY KEY,
+            letters       TEXT    NOT NULL,
+            analyzed_words TEXT   NOT NULL,
+            created_at    INTEGER NOT NULL
+        )`);
+
+        scoresDb.run(`CREATE TABLE IF NOT EXISTS daily_submissions (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            date          TEXT    NOT NULL,
+            uuid          TEXT    NOT NULL,
+            nickname      TEXT    NOT NULL,
+            found_words   TEXT    NOT NULL,
+            submitted_at  INTEGER NOT NULL,
+            UNIQUE(date, uuid)
+        )`);
+        scoresDb.run('CREATE INDEX IF NOT EXISTS idx_ds_date ON daily_submissions(date)');
+
+        scoresDb.run(`CREATE TABLE IF NOT EXISTS daily_word_index (
+            date              TEXT    NOT NULL,
+            normalized_word   TEXT    NOT NULL,
+            submission_count  INTEGER NOT NULL DEFAULT 1,
+            PRIMARY KEY (date, normalized_word)
+        )`);
+
+        // Signal to tests that all tables are ready
+        scoresDb.get('SELECT 1', () => _resolveDbReady?.());
     });
 }
 
@@ -260,6 +289,21 @@ function startServer() {
 }
 
 export { app };
+
+/** Resolves once all scores-DB tables have been created. Used by tests. */
+let _resolveDbReady;
+export const dbReady = new Promise(resolve => { _resolveDbReady = resolve; });
+
+// Daily Challenge routes (registered after sanakirjaCache is ready)
+registerDailyRoutes(app, scoresDb, sanakirjaCache);
+
+// Serve daily.html for /daily/* deep-links
+app.get('/daily/:date', (req, res) => {
+    res.sendFile(path.join(__dirname, 'daily.html'));
+});
+app.get('/daily', (req, res) => {
+    res.sendFile(path.join(__dirname, 'daily.html'));
+});
 
 app.get('/db-version', (req, res) => {
     db.get("SELECT value FROM meta WHERE key = 'version'", (err, row) => {
