@@ -12,7 +12,11 @@ import {
     buildSingularByPlural,
     calculateWordScore,
 } from './server-utils.js';
-import { FINNISH_DICE } from './dice-sets.js';
+const FINNISH_DICE = [
+    "AISPUJ", "AEENEA", "ÄIÖNST", "ANPRSK", "APHSKO",
+    "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU",
+    "AJTOTO", "EITOSS", "ELYTTR", "AKITMV", "AILKVY", "ALRNNU"
+];
 
 // ---------------------------------------------------------------------------
 // registerDailyRoutes(app, scoresDb, sanakirjaCache)
