@@ -18,6 +18,21 @@ function isSuperseded(word, foundWords) {
 const API = "https://bogglewarriors-production.up.railway.app";
 const GAME_DURATION = 90; // seconds
 
+const FINNISH_DICE = [
+    "AISPUJ", "AEENEA", "ÄIÖNST", "ANPRSK", "APHSKO",
+    "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU",
+    "AJTOTO", "EITOSS", "ELYTTR", "AKITMV", "AILKVY", "ALRNNU"
+];
+
+function randomDiceFace() {
+    const dice = [...FINNISH_DICE];
+    for (let i = dice.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [dice[i], dice[j]] = [dice[j], dice[i]];
+    }
+    return dice.map(d => d[Math.floor(Math.random() * d.length)]);
+}
+
 // ---------------------------------------------------------------------------
 // Identity helpers
 // ---------------------------------------------------------------------------
@@ -70,6 +85,8 @@ const resultsOverlay   = document.getElementById('resultsOverlay');
 const playersList      = document.getElementById('players-list');
 const resultsSummaryEl = document.getElementById('results-summary');
 const resultsDateEl    = document.getElementById('results-date');
+const prevDayBtn       = document.getElementById('prevDayBtn');
+const nextDayBtn       = document.getElementById('nextDayBtn');
 const playingAsLabel   = document.getElementById('playing-as-label');
 
 // Nickname modal (pre-game)
@@ -77,6 +94,12 @@ const nicknameOverlay  = document.getElementById('nicknameOverlay');
 const nicknameInput    = document.getElementById('nicknameInput');
 const nicknameSubmit   = document.getElementById('nicknameSubmit');
 const nicknameError    = document.getElementById('nicknameError');
+
+// Welcome back modal
+const welcomeOverlay   = document.getElementById('welcomeOverlay');
+const welcomeName      = document.getElementById('welcomeName');
+const welcomeStart     = document.getElementById('welcomeStart');
+const changeNameBtn    = document.getElementById('changeNameBtn');
 
 const shareBtnEl       = document.getElementById('shareBtn');
 
@@ -92,12 +115,17 @@ let timerInterval  = null;
 let isGameOver     = false;
 let isCountdown    = false;
 let challengeDate  = null;  // will be set from server response
+let viewingDate    = null;  // date currently shown in the results drawer
 let pollInterval   = null;
-let tileCenters    = [];
-let boardRect      = null;
 let isDragging     = false;
 let dragMoved      = false;
 let touchMoved     = false;
+let pointerActive  = false;
+let _rafPending    = false;
+let _tileCenters   = [];
+let _boardRect     = null;
+let swipeCanvas    = null;
+let swipeCtx       = null;
 
 // Sounds (reuse existing assets)
 const correctSound  = new Audio('sounds/correct_answer.mp3');
@@ -140,56 +168,143 @@ function renderBoard(letters) {
         boardEl.appendChild(tile);
     }
     cacheTileCenters();
+    setupSwipeCanvas();
     bindTileEvents();
 }
 
 function cacheTileCenters() {
-    boardRect = boardEl.getBoundingClientRect();
-    tileCenters = Array.from(boardEl.querySelectorAll('.tile')).map(t => {
-        const r = t.getBoundingClientRect();
-        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    _boardRect = boardEl.getBoundingClientRect();
+}
+
+function setupSwipeCanvas() {
+    const old = boardEl.querySelector('.swipe-canvas');
+    if (old) old.remove();
+    const canvas = document.createElement('canvas');
+    canvas.classList.add('swipe-canvas');
+    boardEl.insertBefore(canvas, boardEl.firstChild);
+    swipeCanvas = canvas;
+    swipeCtx = canvas.getContext('2d');
+    _boardRect = boardEl.getBoundingClientRect();
+    const observer = new ResizeObserver(() => {
+        _boardRect = boardEl.getBoundingClientRect();
+        if (selectedTiles.length > 0) {
+            _tileCenters = selectedTiles.map(t => centerOf(t));
+        }
     });
+    observer.observe(boardEl);
+}
+
+function centerOf(tile) {
+    const r = tile.getBoundingClientRect();
+    const b = _boardRect;
+    return { x: r.left - b.left + r.width * 0.5, y: r.top - b.top + r.height * 0.5 };
+}
+
+function drawSelectionPath() {
+    if (!swipeCanvas || selectedTiles.length === 0) {
+        if (swipeCanvas && swipeCtx) swipeCtx.clearRect(0, 0, swipeCanvas.width, swipeCanvas.height);
+        return;
+    }
+    const boardR = _boardRect || boardEl.getBoundingClientRect();
+    if (swipeCanvas.width !== boardR.width || swipeCanvas.height !== boardR.height) {
+        swipeCanvas.width  = boardR.width;
+        swipeCanvas.height = boardR.height;
+    } else {
+        swipeCtx.clearRect(0, 0, swipeCanvas.width, swipeCanvas.height);
+    }
+    if (_tileCenters.length < 2) return;
+    swipeCtx.beginPath();
+    swipeCtx.moveTo(_tileCenters[0].x, _tileCenters[0].y);
+    for (let i = 1; i < _tileCenters.length; i++) {
+        swipeCtx.lineTo(_tileCenters[i].x, _tileCenters[i].y);
+    }
+    swipeCtx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+    swipeCtx.lineWidth   = 40;
+    swipeCtx.lineCap     = 'round';
+    swipeCtx.lineJoin    = 'round';
+    swipeCtx.stroke();
+}
+
+// Returns the tile under (x, y) only if inside its inner 75% hit area
+function tileAtPoint(x, y) {
+    const el = document.elementFromPoint(x, y);
+    const tile = el ? el.closest('.tile') : null;
+    if (!tile) return null;
+    const r = tile.getBoundingClientRect();
+    const margin = 0.125;
+    const inX = x >= r.left + r.width  * margin && x <= r.right  - r.width  * margin;
+    const inY = y >= r.top  + r.height * margin && y <= r.bottom - r.height * margin;
+    return (inX && inY) ? tile : null;
 }
 
 // ---------------------------------------------------------------------------
-// Tile selection — mouse + touch
+// Tile selection — mouse + touch (matches solo game logic)
 // ---------------------------------------------------------------------------
 function bindTileEvents() {
-    const tiles = boardEl.querySelectorAll('.tile');
-    tiles.forEach(tile => {
-        tile.addEventListener('mousedown', e => {
-            e.preventDefault();
-            isDragging = true;
-            dragMoved = false;
-            startSelection(tile);
-        });
-        tile.addEventListener('mouseover', e => {
-            if (e.buttons === 1) extendSelection(tile);
-        });
-        tile.addEventListener('touchstart', e => {
-            e.preventDefault();
-            touchMoved = false;
-            startSelection(tile);
-        }, { passive: false });
-        tile.addEventListener('touchmove', e => {
-            e.preventDefault();
-            const t = e.touches[0];
-            const el = document.elementFromPoint(t.clientX, t.clientY);
-            const over = el?.closest('.tile');
-            if (over) extendSelection(over);
-        }, { passive: false });
+    boardEl.addEventListener('mousedown', e => {
+        const tile = e.target.closest('.tile');
+        if (!tile) return;
+        isDragging = true;
+        dragMoved = false;
+        pointerActive = true;
+        selectTile(tile);
+    });
+    boardEl.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        drawSelectionPath();
+        const tile = tileAtPoint(e.clientX, e.clientY);
+        if (!tile) return;
+        const last = selectedTiles[selectedTiles.length - 1];
+        if (tile !== last) {
+            dragMoved = true;
+            swipeToTile(tile);
+        }
     });
     document.addEventListener('mouseup', () => {
         if (!isDragging) return;
         isDragging = false;
+        pointerActive = false;
         if (dragMoved) submitWord();
     });
+    boardEl.addEventListener('touchstart', e => {
+        e.preventDefault();
+        touchMoved = false;
+        pointerActive = true;
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        const tile = el ? el.closest('.tile') : null;
+        if (tile) selectTile(tile);
+    }, { passive: false });
+    boardEl.addEventListener('touchmove', e => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const tile = tileAtPoint(touch.clientX, touch.clientY);
+        const lenBefore = selectedTiles.length;
+        swipeToTile(tile);
+        if (selectedTiles.length !== lenBefore) touchMoved = true;
+        if (!_rafPending) {
+            _rafPending = true;
+            requestAnimationFrame(() => { drawSelectionPath(); _rafPending = false; });
+        }
+    }, { passive: false });
     boardEl.addEventListener('touchend', () => {
         if (isGameOver || isCountdown) return;
+        pointerActive = false;
         if (!touchMoved) return;
         touchMoved = false;
         submitWord();
     });
+    document.addEventListener('touchstart', e => {
+        if (isGameOver) return;
+        if (selectedTiles.length === 0) return;
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        const isInsideBoard = el && boardEl.contains(el);
+        const isButton = el && el.closest('#submitWord');
+        if (!isInsideBoard && !isButton) {
+            clearSelection();
+        }
+    }, { passive: true });
 }
 
 function tileIndex(tile) { return parseInt(tile.dataset.index, 10); }
@@ -200,35 +315,48 @@ function isAdjacent(tile) {
     return Math.abs(last._row - tile._row) <= 1 && Math.abs(last._col - tile._col) <= 1;
 }
 
-function startSelection(tile) {
-    if (isGameOver || isCountdown) return;
-    clearSelection();
-    addTile(tile);
-    tapSound.currentTime = 0; tapSound.play();
-}
-
-function extendSelection(tile) {
+function selectTile(tile) {
     if (isGameOver || isCountdown) return;
     if (selectedTiles.includes(tile)) {
-        // Backtrack to this tile
         const idx = selectedTiles.indexOf(tile);
-        const removed = selectedTiles.splice(idx + 1);
-        currentWord.splice(idx + 1);
+        const removed = selectedTiles.splice(idx);
+        currentWord.splice(idx);
+        _tileCenters.splice(idx);
         removed.forEach(t => t.classList.remove('selected'));
-    } else {
-        if (!isAdjacent(tile)) return;
-        dragMoved = true;
-        touchMoved = true;
-        addTile(tile);
-        tapSound.currentTime = 0; tapSound.play();
+        updateDisplay();
+        return;
     }
+    if (selectedTiles.length > 0 && !isAdjacent(tile)) return;
+    tile.classList.add('selected');
+    currentWord.push(boardLetters[tileIndex(tile)].toLowerCase());
+    selectedTiles.push(tile);
+    _tileCenters.push(centerOf(tile));
+    tapSound.currentTime = 0; tapSound.play();
     updateDisplay();
 }
 
-function addTile(tile) {
+function swipeToTile(tile) {
+    if (isGameOver || isCountdown) return;
+    if (!tile) return;
+    const last = selectedTiles[selectedTiles.length - 1];
+    if (tile === last) return;
+    // Rubber-band: swiping back to second-to-last deselects the last tile
+    const secondToLast = selectedTiles[selectedTiles.length - 2];
+    if (tile === secondToLast) {
+        const removed = selectedTiles.pop();
+        currentWord.pop();
+        _tileCenters.pop();
+        removed.classList.remove('selected');
+        updateDisplay();
+        return;
+    }
+    if (selectedTiles.includes(tile)) return;
+    if (!isAdjacent(tile)) return;
     tile.classList.add('selected');
-    selectedTiles.push(tile);
     currentWord.push(boardLetters[tileIndex(tile)].toLowerCase());
+    selectedTiles.push(tile);
+    _tileCenters.push(centerOf(tile));
+    tapSound.currentTime = 0; tapSound.play();
     updateDisplay();
 }
 
@@ -236,12 +364,16 @@ function clearSelection() {
     selectedTiles.forEach(t => t.classList.remove('selected'));
     selectedTiles = [];
     currentWord = [];
+    _tileCenters = [];
+    if (swipeCanvas && swipeCtx) swipeCtx.clearRect(0, 0, swipeCanvas.width, swipeCanvas.height);
     selectedWordEl.textContent = '';
     selectedWordEl.style.color = 'white';
 }
 
 function updateDisplay() {
+    selectedWordEl.style.color = 'white';
     selectedWordEl.textContent = currentWord.join('').toUpperCase();
+    drawSelectionPath();
 }
 
 // ---------------------------------------------------------------------------
@@ -251,8 +383,8 @@ async function submitWord() {
     const word = currentWord.join('').toLowerCase();
     clearSelection();
 
-    if (word.length < 3) { flash('Too short', 'orange'); return; }
-    if (foundWords.has(word)) { flash('Already found', 'orange'); return; }
+    if (word.length < 3) { flash('Too short — at least 3 letters', '#ff9900', 2000); return; }
+    if (foundWords.has(word)) { flash('Word already found!', '#ff9900', 2000); return; }
 
     // Validate via server
     let result;
@@ -263,12 +395,19 @@ async function submitWord() {
         );
         result = await r.json();
     } catch {
-        flash('Error checking word', 'orange');
+        flash('Server is not responding', '#ff4444', 3000);
         return;
     }
 
     if (!result.exists) {
-        flash('Not a word', '#ff6b6b');
+        flash('Not a word', '#ff4444');
+        incorrectSound.currentTime = 0; incorrectSound.play();
+        return;
+    }
+
+    // Reject base word if its plural is already found (matches solo game behavior)
+    if (result.nominativePlural && !result.isNominativePlural && foundWords.has(result.nominativePlural)) {
+        flash('Plural already found!', '#ff9900', 2000);
         incorrectSound.currentTime = 0; incorrectSound.play();
         return;
     }
@@ -283,10 +422,15 @@ async function submitWord() {
     totalScoreEl.textContent = total;
     updateFoundWordsList();
 
-    const msg = result.isNominativePlural && result.nominativePlural && foundWords.has(result.nominativePlural)
-        ? null  // base word already shown; plural supersedes it
-        : `+${score} ${word.toUpperCase()}`;
-    if (msg) flash(msg, '#00dd00', 1500);
+    // If this word is the plural of an already-found base word, show the delta
+    const baseEntry = Array.from(foundWords.entries())
+        .find(([w, m]) => w !== word && m.nominativePlural === word);
+    if (baseEntry) {
+        const extraPoints = score - calculateScore(baseEntry[0]);
+        flash(`Plural +${extraPoints} ${word.toUpperCase()}`, '#00dd00', 1500);
+    } else {
+        flash(`+${score} ${word.toUpperCase()}`, '#00dd00', 1500);
+    }
 
     correctSound.currentTime = 0; correctSound.play();
 }
@@ -342,12 +486,29 @@ function startCountdown(onDone) {
     isCountdown = true;
     let n = 3;
     timerEl.textContent = n;
+    const tiles = boardEl.querySelectorAll('.tile');
+    // Shake + randomise letters during countdown, like solo mode
+    tiles.forEach(t => {
+        t.style.animationDelay = `${(Math.random() * 0.35).toFixed(2)}s`;
+        t.classList.add('shuffle-shake');
+    });
+    const shuffleId = setInterval(() => {
+        const fake = randomDiceFace();
+        tiles.forEach((t, i) => t.querySelector('span').textContent = fake[i].toUpperCase());
+    }, 300);
     const id = setInterval(() => {
         n--;
         if (n <= 0) {
             clearInterval(id);
+            clearInterval(shuffleId);
             timerEl.textContent = 'Go!';
             timerEl.classList.remove('warning');
+            // Restore real board letters
+            tiles.forEach((t, i) => t.querySelector('span').textContent = boardLetters[i].toUpperCase());
+            tiles.forEach(t => {
+                t.classList.remove('shuffle-shake');
+                t.style.animationDelay = '';
+            });
             setTimeout(() => {
                 isCountdown = false;
                 timerEl.textContent = formatTime(GAME_DURATION);
@@ -356,7 +517,7 @@ function startCountdown(onDone) {
         } else {
             timerEl.textContent = n;
         }
-    }, 700);
+    }, 1000);
 }
 
 // ---------------------------------------------------------------------------
@@ -366,6 +527,8 @@ async function endGame() {
     if (isGameOver) return;
     clearInterval(timerInterval);
     isGameOver = true;
+    clearSelection();
+    gameEl.classList.add('game-over');
     timerEl.textContent = "Time's up!";
     timerEl.classList.add('warning');
     timesUpSound.play();
@@ -421,8 +584,19 @@ async function showResults() {
     pollInterval = setInterval(refreshLeaderboard, 30_000);
 }
 
+// date helpers
+function dateAddDays(dateStr, n) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    return d.toLocaleDateString('sv-SE');
+}
+
+function today() {
+    return new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
+}
+
 async function refreshLeaderboard() {
-    const date = challengeDate || new URLSearchParams(window.location.search).get('date') || '';
+    const date = viewingDate || challengeDate || new URLSearchParams(window.location.search).get('date') || '';
     try {
         const r = await fetch(`${API}/daily/leaderboard?date=${date}&includeWords=true`);
         const data = await r.json();
@@ -430,10 +604,55 @@ async function refreshLeaderboard() {
     } catch (err) {
         console.error('Leaderboard poll error:', err);
     }
+    updateDateNav();
 }
 
+function updateDateNav() {
+    const d = viewingDate || challengeDate || today();
+    resultsDateEl.textContent = `Challenge date: ${d}`;
+    nextDayBtn.disabled = d >= today();
+    nextDayBtn.style.opacity = nextDayBtn.disabled ? '0.3' : '';
+}
+
+// Results drawer date navigation
+prevDayBtn.addEventListener('click', async () => {
+    const base = viewingDate || challengeDate || today();
+    viewingDate = dateAddDays(base, -1);
+    resultsSummaryEl.textContent = '';
+    playingAsLabel.textContent = '';
+    playersList.innerHTML = '';
+    await refreshLeaderboard();
+});
+
+nextDayBtn.addEventListener('click', async () => {
+    const base = viewingDate || challengeDate || today();
+    const next = dateAddDays(base, 1);
+    if (next > today()) return;
+    viewingDate = next;
+    // If navigated back to today, restore player's own results
+    if (viewingDate === (challengeDate || today())) {
+        viewingDate = null;
+        const stored = getStoredResult();
+        if (stored && stored.date === (challengeDate || today())) {
+            resultsSummaryEl.textContent = `You found ${stored.foundWords.length} words — score: ${stored.score} pts`;
+            playingAsLabel.textContent = `Playing as: ${getNickname()}`;
+        } else {
+            resultsSummaryEl.textContent = '';
+            playingAsLabel.textContent = '';
+        }
+    } else {
+        resultsSummaryEl.textContent = '';
+        playingAsLabel.textContent = '';
+    }
+    playersList.innerHTML = '';
+    await refreshLeaderboard();
+});
+
 // Results drawer open/close
-document.getElementById('leaderboardBtn').addEventListener('click', openResultsDrawer);
+document.getElementById('leaderboardBtn').addEventListener('click', () => {
+    viewingDate = null;
+    openResultsDrawer();
+});
 document.getElementById('resultsClose').addEventListener('click', () => {
     resultsOverlay.classList.remove('active');
 });
@@ -517,6 +736,23 @@ nicknameInput.addEventListener('keydown', e => {
 });
 
 // ---------------------------------------------------------------------------
+// Welcome back modal (returning user, hasn't played today)
+// ---------------------------------------------------------------------------
+welcomeStart.addEventListener('click', () => {
+    welcomeOverlay.classList.add('hidden');
+    startGame();
+});
+
+changeNameBtn.addEventListener('click', () => {
+    welcomeOverlay.classList.add('hidden');
+    nicknameInput.value = '';
+    nicknameError.textContent = '';
+    nicknameSubmit.disabled = true;
+    nicknameOverlay.classList.remove('hidden');
+    nicknameInput.focus();
+});
+
+// ---------------------------------------------------------------------------
 // Submit word button
 // ---------------------------------------------------------------------------
 submitWordBtn.addEventListener('click', () => {
@@ -542,9 +778,8 @@ async function startGame() {
     challengeDate = boardData.date;
     resultsDateEl.textContent = `Challenge date: ${challengeDate}`;
 
-    renderBoard(boardData.letters);
-    gameEl.classList.remove('hidden');
-
+    // Board is already rendered + visible behind the modal; just load real letters
+    boardLetters = boardData.letters;
     startCountdown(() => {
         timeLeft = GAME_DURATION;
         startTimer();
@@ -574,24 +809,41 @@ async function init() {
     }
 
     // Check if already played today
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
     const stored = getStoredResult();
-    if (stored) {
-        challengeDate = stored.date || urlDate || new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
+    if (stored && stored.date === today) {
+        challengeDate = today;
         resultsSummaryEl.textContent = `You found ${stored.foundWords.length} words — score: ${stored.score} pts`;
         resultsDateEl.textContent = `Challenge date: ${challengeDate}`;
         playingAsLabel.textContent = `Playing as: ${getNickname()}`;
+        // Load the board in the background (disabled)
+        try {
+            const r = await fetch(`${API}/daily/board?date=${challengeDate}`);
+            const boardData = await r.json();
+            renderBoard(boardData.letters);
+            isGameOver = true;
+            selectedWordEl.textContent = 'Already played';
+            selectedWordEl.style.color = 'white';
+            gameEl.classList.remove('hidden');
+            gameEl.classList.add('game-over');
+        } catch (_) { /* board fetch failed — just show results without background */ }
         openResultsDrawer();
         await refreshLeaderboard();
         pollInterval = setInterval(refreshLeaderboard, 30_000);
         return;
     }
 
-    // First time today — check nickname
+    // First time today — show the board behind the modal immediately
+    renderBoard(randomDiceFace());
+    gameEl.classList.remove('hidden');
+
     if (!getNickname()) {
         nicknameOverlay.classList.remove('hidden');
         // startGame() is called from nickname submit handler
     } else {
-        startGame();
+        welcomeName.textContent = getNickname();
+        welcomeOverlay.classList.remove('hidden');
+        // startGame() is called from welcomeStart handler
     }
 }
 

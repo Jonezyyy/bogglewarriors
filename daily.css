@@ -1,15 +1,5 @@
 /* ─── Daily Challenge Page Styles ───────────────────────────────────────── */
 
-#top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 16px;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    gap: 12px;
-}
-
 #daily-title {
     font-size: 1.1rem;
     font-weight: bold;
