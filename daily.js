@@ -1,16 +1,8 @@
 // Daily Challenge — client-side game logic.
 // Plain script (no ES modules) so it works when opened as file:// locally.
-
-function calculateScore(word) {
-    const l = word.length;
-    return l >= 8 ? 11 : l === 7 ? 5 : l === 6 ? 3 : l === 5 ? 2 : l >= 3 ? 1 : 0;
-}
-
-function isSuperseded(word, foundWords) {
-    const meta = foundWords.get(word);
-    if (!meta || meta.isNominativePlural) return false;
-    return meta.nominativePlural !== null && foundWords.has(meta.nominativePlural);
-}
+// Scoring + supersede helpers come from window.GameUtils (game-utils.browser.js,
+// loaded before this script).
+const { calculateScore, isSuperseded } = window.GameUtils;
 
 // ---------------------------------------------------------------------------
 // Config
@@ -50,6 +42,10 @@ function todayKey() {
     return 'bw_daily_' + new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
 }
 
+function progressKey() {
+    return 'bw_daily_progress_' + new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
+}
+
 function getStoredResult() {
     const raw = localStorage.getItem(todayKey());
     return raw ? JSON.parse(raw) : null;
@@ -57,6 +53,32 @@ function getStoredResult() {
 
 function storeResult(data) {
     localStorage.setItem(todayKey(), JSON.stringify(data));
+}
+
+function getStoredProgress() {
+    try {
+        const raw = localStorage.getItem(progressKey());
+        return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+}
+
+function saveProgress() {
+    if (isGameOver) return;
+    const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
+    if (challengeDate && challengeDate !== today) return; // only save active today's challenge
+    if (!boardLetters || boardLetters.length !== 16) return;
+    try {
+        localStorage.setItem(progressKey(), JSON.stringify({
+            date: today,
+            boardLetters,
+            foundWords: Array.from(foundWords.entries()),
+            timeLeft,
+        }));
+    } catch (_) { /* quota exceeded — ignore */ }
+}
+
+function clearProgress() {
+    localStorage.removeItem(progressKey());
 }
 
 // ---------------------------------------------------------------------------
@@ -138,14 +160,7 @@ tapSound.volume = 0.5;
 // Scoring helpers (thin wrappers around game-utils)
 // ---------------------------------------------------------------------------
 function calculateTotalScore() {
-    let total = 0;
-    for (const [word, meta] of foundWords) {
-        const metaMap = foundWords; // isSuperseded uses the same Map
-        if (!isSuperseded(word, metaMap)) {
-            total += calculateScore(word);
-        }
-    }
-    return total;
+    return window.GameUtils.calculateTotalScore(foundWords);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +174,9 @@ function renderBoard(letters) {
         const col = i % 4;
         const tile = document.createElement('div');
         tile.classList.add('tile');
+        tile.setAttribute('role', 'gridcell');
+        tile.setAttribute('aria-pressed', 'false');
+        tile.setAttribute('aria-label', letters[i].toUpperCase());
         const span = document.createElement('span');
         span.textContent = letters[i].toUpperCase();
         tile.appendChild(span);
@@ -322,16 +340,17 @@ function selectTile(tile) {
         const removed = selectedTiles.splice(idx);
         currentWord.splice(idx);
         _tileCenters.splice(idx);
-        removed.forEach(t => t.classList.remove('selected'));
+        removed.forEach(t => { t.classList.remove('selected'); t.setAttribute('aria-pressed', 'false'); });
         updateDisplay();
         return;
     }
     if (selectedTiles.length > 0 && !isAdjacent(tile)) return;
     tile.classList.add('selected');
+    tile.setAttribute('aria-pressed', 'true');
     currentWord.push(boardLetters[tileIndex(tile)].toLowerCase());
     selectedTiles.push(tile);
     _tileCenters.push(centerOf(tile));
-    tapSound.currentTime = 0; tapSound.play();
+    tapSound.currentTime = 0; tapSound.play().catch(() => {});
     updateDisplay();
 }
 
@@ -347,21 +366,23 @@ function swipeToTile(tile) {
         currentWord.pop();
         _tileCenters.pop();
         removed.classList.remove('selected');
+        removed.setAttribute('aria-pressed', 'false');
         updateDisplay();
         return;
     }
     if (selectedTiles.includes(tile)) return;
     if (!isAdjacent(tile)) return;
     tile.classList.add('selected');
+    tile.setAttribute('aria-pressed', 'true');
     currentWord.push(boardLetters[tileIndex(tile)].toLowerCase());
     selectedTiles.push(tile);
     _tileCenters.push(centerOf(tile));
-    tapSound.currentTime = 0; tapSound.play();
+    tapSound.currentTime = 0; tapSound.play().catch(() => {});
     updateDisplay();
 }
 
 function clearSelection() {
-    selectedTiles.forEach(t => t.classList.remove('selected'));
+    selectedTiles.forEach(t => { t.classList.remove('selected'); t.setAttribute('aria-pressed', 'false'); });
     selectedTiles = [];
     currentWord = [];
     _tileCenters = [];
@@ -401,14 +422,14 @@ async function submitWord() {
 
     if (!result.exists) {
         flash('Not a word', '#ff4444');
-        incorrectSound.currentTime = 0; incorrectSound.play();
+        incorrectSound.currentTime = 0; incorrectSound.play().catch(() => {});
         return;
     }
 
     // Reject base word if its plural is already found (matches solo game behavior)
     if (result.nominativePlural && !result.isNominativePlural && foundWords.has(result.nominativePlural)) {
         flash('Plural already found!', '#ff9900', 2000);
-        incorrectSound.currentTime = 0; incorrectSound.play();
+        incorrectSound.currentTime = 0; incorrectSound.play().catch(() => {});
         return;
     }
 
@@ -432,7 +453,8 @@ async function submitWord() {
         flash(`+${score} ${word.toUpperCase()}`, '#00dd00', 1500);
     }
 
-    correctSound.currentTime = 0; correctSound.play();
+    correctSound.currentTime = 0; correctSound.play().catch(() => {});
+    saveProgress();
 }
 
 function flash(text, color = 'white', ms = 1800) {
@@ -460,6 +482,8 @@ function updateFoundWordsList() {
         count++;
     }
     foundWordsHeadEl.textContent = `Found Words: ${count}`;
+    const hint = document.getElementById('emptyFoundHint');
+    if (hint) hint.classList.toggle('hidden', count > 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -471,6 +495,7 @@ function startTimer() {
         timeLeft--;
         timerEl.textContent = formatTime(timeLeft);
         if (timeLeft <= 10) timerEl.classList.add('warning');
+        if (timeLeft % 5 === 0) saveProgress(); // throttled progress save
         if (timeLeft <= 0) endGame();
     }, 1000);
 }
@@ -531,7 +556,7 @@ async function endGame() {
     gameEl.classList.add('game-over');
     timerEl.textContent = "Time's up!";
     timerEl.classList.add('warning');
-    timesUpSound.play();
+    timesUpSound.play().catch(() => {});
 
     const wordList = Array.from(foundWords.keys());
 
@@ -554,17 +579,73 @@ async function endGame() {
     }
 
     // Cache result in localStorage
-    storeResult({ foundWords: wordList, score: calculateTotalScore(), date: challengeDate });
+    storeResult({
+        foundWords: wordList,
+        score: calculateTotalScore(),
+        date: challengeDate,
+        completedAt: Date.now(),
+    });
+    clearProgress();
 
     // Transition to results
     await showResults();
 }
 
 // ---------------------------------------------------------------------------
+// Overlay a11y helpers (Escape, focus trap, focus restore)
+// ---------------------------------------------------------------------------
+const FOCUSABLE_SEL = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const _overlayFocusReturn = new Map();
+
+function showOverlay(el) {
+    if (!el) return;
+    _overlayFocusReturn.set(el.id, document.activeElement);
+    if (el.classList.contains('drawer-overlay')) el.classList.add('active');
+    el.classList.remove('hidden');
+    el.setAttribute('aria-hidden', 'false');
+    const first = el.querySelector(FOCUSABLE_SEL);
+    if (first) setTimeout(() => first.focus(), 0);
+}
+
+function hideOverlay(el) {
+    if (!el) return;
+    if (el.classList.contains('drawer-overlay')) el.classList.remove('active');
+    if (el.classList.contains('modal-overlay')) el.classList.add('hidden');
+    el.setAttribute('aria-hidden', 'true');
+    const prev = _overlayFocusReturn.get(el.id);
+    _overlayFocusReturn.delete(el.id);
+    if (prev && typeof prev.focus === 'function') {
+        try { prev.focus(); } catch (_) { /* ignore */ }
+    }
+}
+
+document.addEventListener('keydown', (e) => {
+    const open = document.querySelector('.drawer-overlay.active, .modal-overlay:not(.hidden)');
+    if (!open) return;
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        hideOverlay(open);
+        return;
+    }
+    if (e.key === 'Tab') {
+        const focusables = Array.from(open.querySelectorAll(FOCUSABLE_SEL))
+            .filter(el => el.offsetParent !== null);
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault(); first.focus();
+        }
+    }
+});
+
+// ---------------------------------------------------------------------------
 // Results screen
 // ---------------------------------------------------------------------------
 function openResultsDrawer() {
-    resultsOverlay.classList.add('active');
+    showOverlay(resultsOverlay);
 }
 
 async function showResults() {
@@ -654,10 +735,41 @@ document.getElementById('leaderboardBtn').addEventListener('click', () => {
     openResultsDrawer();
 });
 document.getElementById('resultsClose').addEventListener('click', () => {
-    resultsOverlay.classList.remove('active');
+    hideOverlay(resultsOverlay);
+});
+// #19 — only close on a click that *both* started and ended on the overlay backdrop.
+// Without this, a drag that starts inside the drawer and releases on the backdrop
+// (e.g. flicking text selection) was closing the drawer.
+let _resultsMouseDownOnBackdrop = false;
+resultsOverlay.addEventListener('mousedown', e => {
+    _resultsMouseDownOnBackdrop = (e.target === resultsOverlay);
 });
 resultsOverlay.addEventListener('click', e => {
-    if (e.target === resultsOverlay) resultsOverlay.classList.remove('active');
+    if (e.target === resultsOverlay && _resultsMouseDownOnBackdrop) hideOverlay(resultsOverlay);
+    _resultsMouseDownOnBackdrop = false;
+});
+
+// #7 + #28 — Back button: warn if a game is in progress, otherwise navigate.
+const backBtnEl = document.getElementById('backBtn');
+function isGameInProgress() {
+    return !isGameOver && Array.isArray(boardLetters) && boardLetters.length === 16
+        && typeof timeLeft === 'number' && timeLeft > 0 && timeLeft < GAME_DURATION;
+}
+if (backBtnEl) {
+    backBtnEl.addEventListener('click', () => {
+        if (isGameInProgress()) {
+            const ok = confirm('Quit the daily challenge? Your progress is saved and you can resume later today.');
+            if (!ok) return;
+        }
+        window.location.href = 'index.html';
+    });
+}
+window.addEventListener('beforeunload', e => {
+    if (isGameInProgress()) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+    }
 });
 
 function renderPlayers(entries) {
@@ -705,14 +817,35 @@ function escHtml(str) {
 // ---------------------------------------------------------------------------
 // Share
 // ---------------------------------------------------------------------------
-shareBtnEl.addEventListener('click', () => {
+shareBtnEl.addEventListener('click', async () => {
     const url = `${window.location.origin}/daily/${challengeDate}`;
-    navigator.clipboard.writeText(url).then(() => {
+    const showCopied = () => {
         shareBtnEl.textContent = 'Copied!';
         setTimeout(() => { shareBtnEl.textContent = '🔗 Copy link'; }, 2000);
-    }).catch(() => {
-        prompt('Copy this link:', url);
-    });
+    };
+    // Try the modern clipboard API (requires HTTPS + user gesture, may be undefined on iOS Safari < 13.4)
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(url);
+            showCopied();
+            return;
+        }
+    } catch (_) { /* fall through to legacy */ }
+    // Legacy fallback: hidden textarea + execCommand('copy')
+    try {
+        const ta = document.createElement('textarea');
+        ta.value = url;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        if (ok) { showCopied(); return; }
+    } catch (_) { /* fall through */ }
+    // Last resort: show the URL so the user can copy manually
+    prompt('Copy this link:', url);
 });
 
 // ---------------------------------------------------------------------------
@@ -727,7 +860,7 @@ nicknameSubmit.addEventListener('click', () => {
     const name = nicknameInput.value.trim();
     if (!name) return;
     saveNickname(name);
-    nicknameOverlay.classList.add('hidden');
+    hideOverlay(nicknameOverlay);
     startGame();
 });
 
@@ -739,16 +872,16 @@ nicknameInput.addEventListener('keydown', e => {
 // Welcome back modal (returning user, hasn't played today)
 // ---------------------------------------------------------------------------
 welcomeStart.addEventListener('click', () => {
-    welcomeOverlay.classList.add('hidden');
+    hideOverlay(welcomeOverlay);
     startGame();
 });
 
 changeNameBtn.addEventListener('click', () => {
-    welcomeOverlay.classList.add('hidden');
+    hideOverlay(welcomeOverlay);
     nicknameInput.value = '';
     nicknameError.textContent = '';
     nicknameSubmit.disabled = true;
-    nicknameOverlay.classList.remove('hidden');
+    showOverlay(nicknameOverlay);
     nicknameInput.focus();
 });
 
@@ -756,7 +889,7 @@ changeNameBtn.addEventListener('click', () => {
 // Submit word button
 // ---------------------------------------------------------------------------
 submitWordBtn.addEventListener('click', () => {
-    tapSound.currentTime = 0; tapSound.play();
+    tapSound.currentTime = 0; tapSound.play().catch(() => {});
     submitWord();
 });
 
@@ -783,8 +916,15 @@ async function startGame() {
     startCountdown(() => {
         timeLeft = GAME_DURATION;
         startTimer();
+        saveProgress();
     });
 }
+
+// Save progress when the user backgrounds / closes the tab
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') saveProgress();
+});
+window.addEventListener('pagehide', saveProgress);
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -813,7 +953,11 @@ async function init() {
     const stored = getStoredResult();
     if (stored && stored.date === today) {
         challengeDate = today;
-        resultsSummaryEl.textContent = `You found ${stored.foundWords.length} words — score: ${stored.score} pts`;
+        const completedSuffix = stored.completedAt
+            ? ` · finished ${new Date(stored.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+            : '';
+        resultsSummaryEl.textContent =
+            `You found ${stored.foundWords.length} words — score: ${stored.score} pts${completedSuffix}`;
         resultsDateEl.textContent = `Challenge date: ${challengeDate}`;
         playingAsLabel.textContent = `Playing as: ${getNickname()}`;
         // Load the board in the background (disabled)
@@ -833,16 +977,36 @@ async function init() {
         return;
     }
 
+    // Check for an in-progress game (tab closed / reload mid-game)
+    const progress = getStoredProgress();
+    if (progress && progress.date === today
+        && Array.isArray(progress.boardLetters) && progress.boardLetters.length === 16
+        && typeof progress.timeLeft === 'number' && progress.timeLeft > 0) {
+        challengeDate = today;
+        resultsDateEl.textContent = `Challenge date: ${challengeDate}`;
+        boardLetters = progress.boardLetters;
+        renderBoard(boardLetters);
+        gameEl.classList.remove('hidden');
+        // Restore found words
+        foundWords = new Map(progress.foundWords || []);
+        timeLeft = progress.timeLeft;
+        totalScoreEl.textContent = calculateTotalScore();
+        updateFoundWordsList();
+        // Resume directly into the timer (skip welcome modal + countdown)
+        startTimer();
+        return;
+    }
+
     // First time today — show the board behind the modal immediately
     renderBoard(randomDiceFace());
     gameEl.classList.remove('hidden');
 
     if (!getNickname()) {
-        nicknameOverlay.classList.remove('hidden');
+        showOverlay(nicknameOverlay);
         // startGame() is called from nickname submit handler
     } else {
         welcomeName.textContent = getNickname();
-        welcomeOverlay.classList.remove('hidden');
+        showOverlay(welcomeOverlay);
         // startGame() is called from welcomeStart handler
     }
 }

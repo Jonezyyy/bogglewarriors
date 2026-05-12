@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Boggle Warriors</title>
     <link rel="icon" type="image/svg+xml" href="images/fav_icon.svg">
-    <link rel="stylesheet" href="styles.css?v=27">
-    <link rel="stylesheet" href="leaderboard.css?v=2">
+    <link rel="stylesheet" href="styles.css?v=31">
+    <link rel="stylesheet" href="leaderboard.css?v=4">
 </head>
 <body>
 
@@ -39,10 +39,10 @@
         <div id="board-container">
             <div id="board-top-row">
                 <button id="revealBtn" class="hidden">Reveal</button>
-                <div id="selected-word">Get ready!</div>
+                <div id="selected-word" role="status" aria-live="polite" aria-atomic="true">Get ready!</div>
                 <div class="board-top-spacer"></div>
             </div>
-            <div id="board"></div>
+            <div id="board" role="grid" aria-label="Boggle board"></div>
         </div>
         <div id="buttons">
             <button id="newGame">New</button>
@@ -77,10 +77,10 @@
     </div>
 
     <!-- Leaderboard drawer -->
-    <div id="leaderboardOverlay" class="drawer-overlay">
+    <div id="leaderboardOverlay" class="drawer-overlay" role="dialog" aria-modal="true" aria-labelledby="leaderboardTitle" aria-hidden="true">
         <div class="drawer drawer-right">
-            <button class="drawer-close" id="leaderboardClose">&#10005;</button>
-            <h2>&#127942; Leaderboard</h2>
+            <button class="drawer-close" id="leaderboardClose" aria-label="Close leaderboard">&#10005;</button>
+            <h2 id="leaderboardTitle">&#127942; Leaderboard</h2>
             <div class="lb-tabs">
                 <button class="lb-tab active" data-type="daily">Today</button>
                 <button class="lb-tab" data-type="alltime">All time</button>
@@ -90,10 +90,10 @@
     </div>
 
     <!-- Nickname modal -->
-    <div id="nicknameOverlay" class="modal-overlay">
+    <div id="nicknameOverlay" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="nicknameTitle" aria-hidden="true">
         <div class="modal">
-            <button class="modal-close" id="nicknameClose">&#10005;</button>
-            <h2>&#127881; Top 10!</h2>
+            <button class="modal-close" id="nicknameClose" aria-label="Close">&#10005;</button>
+            <h2 id="nicknameTitle">&#127881; Top 10!</h2>
             <p>Great job! Save your score to the leaderboard</p>
             <input id="nicknameInput" type="text" maxlength="20" placeholder="Nickname..." autocomplete="off" />
             <div id="nicknameError"></div>
@@ -104,15 +104,15 @@
     </div>
 
     <!-- Settings drawer -->
-    <div id="settingsOverlay" class="drawer-overlay">
+    <div id="settingsOverlay" class="drawer-overlay" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true">
         <div class="drawer drawer-left">
-            <button class="drawer-close" id="settingsClose">&#10005;</button>
-            <h2>Menu</h2>
+            <button class="drawer-close" id="settingsClose" aria-label="Close menu">&#10005;</button>
+            <h2 id="settingsTitle">Menu</h2>
             <div class="settings-group">
                 <label class="settings-label">Game Mode</label>
                 <div class="settings-options">
                     <button class="settings-option active" data-game-mode="solo">Solo</button>
-                    <button class="settings-option" data-game-mode="group">Group</button>
+                    <button class="settings-option" data-game-mode="group" title="Tiles rotate randomly each round to keep things fair when sharing one screen">Group</button>
                     <button class="settings-option" data-game-mode="zen" id="zenModeBtn">Zen</button>
                 </div>
                 <div class="settings-hint hidden" id="playModeHint">Zen mode is available in Finnish only.</div>
@@ -130,6 +130,7 @@
         </div>
     </div>
 
-    <script src="script.js?v=28"></script>
+    <script src="game-utils.browser.js?v=1"></script>
+    <script src="script.js?v=31"></script>
 </body>
 </html>

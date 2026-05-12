@@ -109,13 +109,6 @@
     border-bottom: none;
 }
 
-.lb-highlight {
-    background: rgba(255, 210, 50, 0.18);
-    border-radius: 8px;
-    border-bottom: none !important;
-    outline: 1px solid rgba(255, 210, 50, 0.5);
-}
-
 .lb-rank {
     color: #aaa;
     font-size: 13px;
@@ -179,7 +172,9 @@
 }
 
 #nicknameInput:focus {
-    border-color: rgba(255, 200, 50, 0.7);
+    border-color: rgba(255, 200, 50, 0.95);
+    box-shadow: 0 0 0 3px rgba(255, 200, 50, 0.25);
+    outline: none;
 }
 
 #nicknameError {
@@ -240,4 +235,15 @@
     .lb-date {
         display: none;
     }
+}
+
+/* ───────── Sprint 2 #27 mobile leaderboard ─────────────────────────────── */
+@media (max-width: 500px) {
+    .lb-row {
+        grid-template-columns: 24px 1fr auto auto;
+        font-size: 14px;
+    }
+    .lb-date { display: none; }
+    .lb-name { font-size: 14px; }
+    .lb-score, .lb-words { font-size: 13px; }
 }

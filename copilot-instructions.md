@@ -9,8 +9,7 @@ Players find Finnish or English words on a 4×4 letter board within a 90-second 
 - Frontend: Vanilla JavaScript (ES2020+), no frameworks, no build step
 - Backend: Node.js + Express (ESM), SQLite via `sqlite3`
 - Dictionaries: ~148,000 Finnish words (kaikki.org, SQLite), Sanakirja.fi JSON, Free Dictionary API (English)
-- Hosting: Raspberry Pi, Nginx reverse proxy, DuckDNS dynamic DNS
-
+- Hosting: Railway (backend API), static frontend files served from the same repo root
 ---
 
 ## File Structure
@@ -29,12 +28,16 @@ Players find Finnish or English words on a 4×4 letter board within a 90-second 
     correct_answer.mp3
     incorrect_answer.mp3
     time_up.mp3
-/server/
   server.js                       — Express API (ESM)
-  finnish_words.db                — SQLite: finnish_words, meta tables
-  scores.db                       — SQLite: scores table
-  sanakirja_boggle_plurals.json   — Sanakirja.fi word source
+  server-daily.js                 — Daily challenge routes
+  server-utils.js                 — Board analysis, scoring helpers
+  game-utils.js                   — Shared scoring logic (ESM, used by server + tests)
+  game-utils.browser.js           — IIFE mirror of game-utils.js for browser (window.GameUtils)
+  daily.html / daily.js / daily.css — Daily challenge page
+  tests/                          — Vitest test suite (138 tests)
 ```
+
+All files live at the **repo root** — there is no `/server/` subdirectory.
 
 ---
 

@@ -190,20 +190,30 @@ export function computeDailyScores(submissions, singularByPlural) {
         }
     }
 
-    // Step 2: score each submission — only words with exactly 1 unique owner count
+    // Step 2: score each submission — only words with exactly 1 unique owner count.
+    // When a player found both singular and plural of the same root, credit the
+    // higher-scoring form (always the plural) rather than whichever appeared first.
     return submissions.map(sub => {
         const words = typeof sub.found_words === 'string'
             ? JSON.parse(sub.found_words)
             : sub.found_words;
-        const counted = new Set();
-        let score = 0;
-        let uniqueWordCount = 0;
+
+        // First pass: for each normalized key, keep the highest word-score found.
+        const bestScore = new Map();
         for (const w of words) {
             const norm = normalizeWordForDedup(w, singularByPlural);
-            if (counted.has(norm)) continue;
-            counted.add(norm);
+            const s = calculateWordScore(w);
+            if (!bestScore.has(norm) || s > bestScore.get(norm)) {
+                bestScore.set(norm, s);
+            }
+        }
+
+        // Second pass: sum up unique words that only this player found.
+        let score = 0;
+        let uniqueWordCount = 0;
+        for (const [norm, s] of bestScore) {
             if (wordOwners.get(norm)?.size === 1) {
-                score += calculateWordScore(w);
+                score += s;
                 uniqueWordCount++;
             }
         }

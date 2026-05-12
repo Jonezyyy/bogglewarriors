@@ -247,3 +247,28 @@
     min-height: 1em;
     text-align: center;
 }
+
+/* ───────── Sprint 2 mobile additions ───────────────────────────────────── */
+
+/* #9 – cap player list height so long lists scroll inside the drawer */
+#players-list {
+    max-height: 60vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-right: 4px;
+}
+
+/* #27 – tighten player cards on narrow phones */
+@media (max-width: 500px) {
+    .player-card {
+        padding: 8px 10px;
+    }
+    .player-card-header {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .player-nickname { font-size: 0.95rem; }
+    .player-score    { font-size: 0.9rem; }
+    .player-unique-count { font-size: 0.75rem; }
+    .word-chip { font-size: 0.8rem; padding: 2px 6px; }
+}

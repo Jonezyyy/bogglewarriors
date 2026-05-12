@@ -842,6 +842,15 @@ li.missed {
     color: #ffe066;
 }
 
+#maxBoardScore.retry-link {
+    color: #ff9966;
+    text-decoration: underline;
+}
+
+#maxBoardScore.retry-link:hover {
+    color: #ffaa77;
+}
+
 #sidebar ul {
     list-style: none;
     padding: 0;
@@ -1158,4 +1167,36 @@ li.missed {
     font-weight: bold;
     opacity: 1 !important;
     margin-top: 6px !important;
+}
+
+/* ───────── Sprint 2 a11y/mobile additions ───────────────────────────────── */
+
+/* #16 – found-words sidebar should scroll on tall lists */
+#foundWordsContainer {
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* #24 – very small phones (<= 360px wide) */
+@media (max-width: 360px) {
+    :root {
+        --tile-size: 60px;
+        --tile-font: 30px;
+        --gap: 12px;
+    }
+    #newGame    { width: 90px;  font-size: 22px; }
+    #submitWord { width: 180px; font-size: 22px; }
+}
+
+/* #25 – respect prefers-reduced-motion: kill non-essential animations */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
 }

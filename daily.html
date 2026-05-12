@@ -5,18 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Boggle Warriors — Daily Challenge</title>
     <link rel="icon" type="image/svg+xml" href="images/fav_icon.svg">
-    <link rel="stylesheet" href="styles.css?v=28">
+    <link rel="stylesheet" href="styles.css?v=31">
+    <link rel="stylesheet" href="daily.css?v=2">
 </head>
 <body>
 
     <!-- Top bar — mirrors index.html structure -->
     <div id="top-bar">
-        <a id="backBtn" class="icon-btn" href="index.html" aria-label="Back to game">
+        <button id="backBtn" class="icon-btn" type="button" aria-label="Back to game">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
             </svg>
-        </a>
+        </button>
         <div id="timer">1:30</div>
         <button id="leaderboardBtn" class="icon-btn" aria-label="Results">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -34,10 +35,10 @@
     <div id="game" class="hidden">
         <div id="board-container">
             <div id="board-top-row">
-                <div id="selected-word">Get ready!</div>
+                <div id="selected-word" role="status" aria-live="polite" aria-atomic="true">Get ready!</div>
                 <div class="board-top-spacer"></div>
             </div>
-            <div id="board"></div>
+            <div id="board" role="grid" aria-label="Boggle board"></div>
         </div>
         <div id="buttons" class="daily-buttons">
             <button id="submitWord">Submit</button>
@@ -67,12 +68,12 @@
     </div>
 
     <!-- Results drawer (slides in from right, like leaderboard in index.html) -->
-    <div id="resultsOverlay" class="drawer-overlay">
+    <div id="resultsOverlay" class="drawer-overlay" role="dialog" aria-modal="true" aria-labelledby="resultsTitle" aria-hidden="true">
         <div class="drawer drawer-right">
             <div class="drawer-close-row">
-                <button class="drawer-close" id="resultsClose">&#10005;</button>
+                <button class="drawer-close" id="resultsClose" aria-label="Close results">&#10005;</button>
             </div>
-            <h2>&#127881; Results</h2>
+            <h2 id="resultsTitle">&#127881; Results</h2>
             <div id="results-date-row">
                 <button id="prevDayBtn" class="icon-btn" aria-label="Previous day">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
@@ -99,9 +100,9 @@
     </div>
 
     <!-- Nickname modal (shown before game if no nickname stored) -->
-    <div id="nicknameOverlay" class="modal-overlay hidden">
+    <div id="nicknameOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="dailyNicknameTitle" aria-hidden="true">
         <div class="modal">
-            <h2>Daily Challenge</h2>
+            <h2 id="dailyNicknameTitle">Daily Challenge</h2>
             <p>Enter your nickname to join today's challenge.</p>
             <input id="nicknameInput" type="text" maxlength="20" placeholder="Nickname..." autocomplete="off" />
             <div id="nicknameError"></div>
@@ -112,9 +113,9 @@
     </div>
 
     <!-- Welcome back modal (returning user, hasn't played today) -->
-    <div id="welcomeOverlay" class="modal-overlay hidden">
+    <div id="welcomeOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" aria-hidden="true">
         <div class="modal">
-            <h2>Daily Challenge</h2>
+            <h2 id="welcomeTitle">Daily Challenge</h2>
             <p>Welcome back,</p>
             <div class="welcome-name-row">
                 <span id="welcomeName"></span>
@@ -132,6 +133,7 @@
         </div>
     </div>
 
-    <script src="daily.js?v=18"></script>
+    <script src="game-utils.browser.js?v=1"></script>
+    <script src="daily.js?v=22"></script>
 </body>
 </html>
