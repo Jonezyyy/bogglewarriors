@@ -801,9 +801,10 @@ function renderPlayers(entries) {
                 <span class="player-unique-count">${entry.uniqueWordCount} unique</span>
             </div>`;
 
-        const chips = words.map(w =>
-            `<span class="word-chip${w.isUnique ? '' : ' stolen'}">${escHtml(w.word)}</span>`
-        ).join('');
+        const chips = words.map(w => {
+            const cls = w.isSuperseded ? ' superseded' : w.isUnique ? '' : ' stolen';
+            return `<span class="word-chip${cls}">${escHtml(w.word)}</span>`;
+        }).join('');
 
         card.innerHTML = header + `<div class="player-words">${chips}</div>`;
         playersList.appendChild(card);

@@ -139,6 +139,12 @@
     opacity: 0.45;
 }
 
+/* singular superseded by own plural — faded but not crossed */
+.word-chip.superseded {
+    opacity: 0.4;
+    font-style: italic;
+}
+
 /* ─── Share + poll notice ────────────────────────────────────────────────── */
 .poll-notice {
     text-align: center;

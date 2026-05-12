@@ -257,13 +257,23 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
                 if (includeWords) {
                     const sub = submissions.find(s => s.uuid === entry.uuid);
                     const words = sub ? JSON.parse(sub.found_words) : [];
-                    const counted = new Set();
+                    // Pre-compute best (highest-scoring) form per normalized key so
+                    // the plural is shown as accepted and the singular as superseded.
+                    const bestFormByNorm = new Map();
+                    for (const w of words) {
+                        const norm = normalizeWordForDedup(w, singularByPlural);
+                        const s = calculateWordScore(w);
+                        if (!bestFormByNorm.has(norm) || s > bestFormByNorm.get(norm).score) {
+                            bestFormByNorm.set(norm, { word: w, score: s });
+                        }
+                    }
                     base.words = words.map(w => {
                         const norm = normalizeWordForDedup(w, singularByPlural);
                         const count = wordIndex.get(norm) ?? 1;
-                        const isUnique = count === 1 && !counted.has(norm);
-                        counted.add(norm);
-                        return { word: w, isUnique };
+                        const isBestForm = bestFormByNorm.get(norm)?.word === w;
+                        const isUnique = count === 1 && isBestForm;
+                        const isSuperseded = !isBestForm; // lower form of a singular/plural pair
+                        return { word: w, isUnique, isSuperseded };
                     });
                     // mark isCurrentPlayer server-side? No — client handles that via uuid in localStorage
                 }
