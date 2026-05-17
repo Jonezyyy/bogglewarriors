@@ -10,6 +10,7 @@ import {
     BOARD_CELLS, MAX_WORD_LENGTH
 } from './server-utils.js';
 import { registerDailyRoutes } from './server-daily.js';
+import { registerWarriorRoutes } from './server-warrior.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -304,6 +305,17 @@ app.get('/daily/:date', (req, res) => {
 });
 app.get('/daily', (req, res) => {
     res.sendFile(path.join(__dirname, 'daily.html'));
+});
+
+// Warrior Mode routes
+registerWarriorRoutes(app, scoresDb, sanakirjaCache);
+
+// Serve warrior.html for /warrior/* deep-links
+app.get('/warrior/:date', (req, res) => {
+    res.sendFile(path.join(__dirname, 'warrior.html'));
+});
+app.get('/warrior', (req, res) => {
+    res.sendFile(path.join(__dirname, 'warrior.html'));
 });
 
 app.get('/db-version', (req, res) => {
