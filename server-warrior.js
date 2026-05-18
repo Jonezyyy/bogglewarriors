@@ -61,6 +61,8 @@ export function registerWarriorRoutes(app, scoresDb, sanakirjaCache) {
         created_at     INTEGER NOT NULL
     )`);
 
+    // warrior_submissions has NO unique(date, uuid) — multiple plays per day are allowed.
+    // Migration: if table exists with the old single-play unique constraint, recreate it.
     scoresDb.run(`CREATE TABLE IF NOT EXISTS warrior_submissions (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
         date           TEXT    NOT NULL,
@@ -70,9 +72,36 @@ export function registerWarriorRoutes(app, scoresDb, sanakirjaCache) {
         word_count     INTEGER NOT NULL DEFAULT 0,
         score          INTEGER NOT NULL DEFAULT 0,
         found_words    TEXT    NOT NULL,
-        submitted_at   INTEGER NOT NULL,
-        UNIQUE(date, uuid)
+        submitted_at   INTEGER NOT NULL
     )`);
+
+    // If the old schema had UNIQUE(date, uuid), migrate by recreating without it.
+    scoresDb.run(`
+        CREATE TABLE IF NOT EXISTS warrior_submissions_v2 (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            date           TEXT    NOT NULL,
+            uuid           TEXT    NOT NULL,
+            nickname       TEXT    NOT NULL,
+            survival_time  INTEGER NOT NULL,
+            word_count     INTEGER NOT NULL DEFAULT 0,
+            score          INTEGER NOT NULL DEFAULT 0,
+            found_words    TEXT    NOT NULL,
+            submitted_at   INTEGER NOT NULL
+        )
+    `, () => {
+        scoresDb.get("SELECT name FROM sqlite_master WHERE type='index' AND name='sqlite_autoindex_warrior_submissions_1'", (err, row) => {
+            if (!row) return; // no old unique index — nothing to migrate
+            console.log('[warrior] Migrating warrior_submissions to remove unique(date, uuid)...');
+            scoresDb.serialize(() => {
+                scoresDb.run('INSERT INTO warrior_submissions_v2 SELECT * FROM warrior_submissions');
+                scoresDb.run('DROP TABLE warrior_submissions');
+                scoresDb.run('ALTER TABLE warrior_submissions_v2 RENAME TO warrior_submissions', err => {
+                    if (err) console.error('[warrior] Migration error:', err.message);
+                    else console.log('[warrior] Migration complete.');
+                });
+            });
+        });
+    });
 
     scoresDb.run('CREATE INDEX IF NOT EXISTS idx_ws_date ON warrior_submissions(date)');
 
@@ -225,21 +254,13 @@ export function registerWarriorRoutes(app, scoresDb, sanakirjaCache) {
         const submittedAt = Math.floor(Date.now() / 1000);
 
         try {
-            let result;
-            try {
-                result = await dbRun(
-                    `INSERT INTO warrior_submissions
-                     (date, uuid, nickname, survival_time, word_count, score, found_words, submitted_at)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [submittedDate, cleanUuid, cleanNickname, Math.round(survivalTime),
-                     cleanWords.length, score, JSON.stringify(cleanWords), submittedAt]
-                );
-            } catch (err) {
-                if (err.message && err.message.includes('UNIQUE constraint failed')) {
-                    return res.status(409).json({ error: 'Already submitted for this date' });
-                }
-                throw err;
-            }
+            const result = await dbRun(
+                `INSERT INTO warrior_submissions
+                 (date, uuid, nickname, survival_time, word_count, score, found_words, submitted_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [submittedDate, cleanUuid, cleanNickname, Math.round(survivalTime),
+                 cleanWords.length, score, JSON.stringify(cleanWords), submittedAt]
+            );
 
             res.json({
                 submissionId: result.lastID,
@@ -267,13 +288,19 @@ export function registerWarriorRoutes(app, scoresDb, sanakirjaCache) {
         const today = getTodayHelsinki();
 
         try {
+            // For each player show only their best run (highest survival_time).
             const rows = await dbAll(
-                `SELECT uuid, nickname, survival_time, word_count, score, found_words
-                 FROM warrior_submissions
-                 WHERE date = ?
-                 ORDER BY survival_time DESC, score DESC
+                `SELECT ws.uuid, ws.nickname, ws.survival_time, ws.word_count, ws.score, ws.found_words
+                 FROM warrior_submissions ws
+                 INNER JOIN (
+                     SELECT uuid, MAX(survival_time) AS best_time
+                     FROM warrior_submissions
+                     WHERE date = ?
+                     GROUP BY uuid
+                 ) best ON ws.uuid = best.uuid AND ws.survival_time = best.best_time AND ws.date = ?
+                 ORDER BY ws.survival_time DESC, ws.score DESC
                  LIMIT 50`,
-                [date]
+                [date, date]
             );
 
             const entries = rows.map((row, i) => ({
