@@ -61,8 +61,8 @@ export function registerWarriorRoutes(app, scoresDb, sanakirjaCache) {
         created_at     INTEGER NOT NULL
     )`);
 
-    // warrior_submissions has NO unique(date, uuid) — multiple plays per day are allowed.
-    // Migration: if table exists with the old single-play unique constraint, recreate it.
+    // warrior_submissions — no UNIQUE(date, uuid), multiple plays per day are allowed.
+    // If the table was previously created with that unique constraint, migrate it away.
     scoresDb.run(`CREATE TABLE IF NOT EXISTS warrior_submissions (
         id             INTEGER PRIMARY KEY AUTOINCREMENT,
         date           TEXT    NOT NULL,
@@ -73,37 +73,58 @@ export function registerWarriorRoutes(app, scoresDb, sanakirjaCache) {
         score          INTEGER NOT NULL DEFAULT 0,
         found_words    TEXT    NOT NULL,
         submitted_at   INTEGER NOT NULL
-    )`);
+    )`, (err) => {
+        if (err) return console.error('[warrior] Error creating warrior_submissions:', err.message);
 
-    // If the old schema had UNIQUE(date, uuid), migrate by recreating without it.
-    scoresDb.run(`
-        CREATE TABLE IF NOT EXISTS warrior_submissions_v2 (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
-            date           TEXT    NOT NULL,
-            uuid           TEXT    NOT NULL,
-            nickname       TEXT    NOT NULL,
-            survival_time  INTEGER NOT NULL,
-            word_count     INTEGER NOT NULL DEFAULT 0,
-            score          INTEGER NOT NULL DEFAULT 0,
-            found_words    TEXT    NOT NULL,
-            submitted_at   INTEGER NOT NULL
-        )
-    `, () => {
-        scoresDb.get("SELECT name FROM sqlite_master WHERE type='index' AND name='sqlite_autoindex_warrior_submissions_1'", (err, row) => {
-            if (!row) return; // no old unique index — nothing to migrate
-            console.log('[warrior] Migrating warrior_submissions to remove unique(date, uuid)...');
-            scoresDb.serialize(() => {
-                scoresDb.run('INSERT INTO warrior_submissions_v2 SELECT * FROM warrior_submissions');
-                scoresDb.run('DROP TABLE warrior_submissions');
-                scoresDb.run('ALTER TABLE warrior_submissions_v2 RENAME TO warrior_submissions', err => {
-                    if (err) console.error('[warrior] Migration error:', err.message);
-                    else console.log('[warrior] Migration complete.');
+        // Check whether the old UNIQUE(date, uuid) autoindex still exists on the table.
+        scoresDb.get(
+            `SELECT COUNT(*) AS cnt FROM sqlite_master
+             WHERE type='index' AND tbl_name='warrior_submissions'
+             AND name LIKE 'sqlite_autoindex%'`,
+            (err, row) => {
+                if (err || !row || row.cnt === 0) {
+                    // Fresh table or already migrated — just ensure the index exists.
+                    scoresDb.run('CREATE INDEX IF NOT EXISTS idx_ws_date ON warrior_submissions(date)');
+                    return;
+                }
+
+                // Old schema found: recreate without the unique constraint.
+                console.log('[warrior] Migrating warrior_submissions: removing UNIQUE(date, uuid)...');
+                scoresDb.run(`CREATE TABLE warrior_submissions_mig (
+                    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date           TEXT    NOT NULL,
+                    uuid           TEXT    NOT NULL,
+                    nickname       TEXT    NOT NULL,
+                    survival_time  INTEGER NOT NULL,
+                    word_count     INTEGER NOT NULL DEFAULT 0,
+                    score          INTEGER NOT NULL DEFAULT 0,
+                    found_words    TEXT    NOT NULL,
+                    submitted_at   INTEGER NOT NULL
+                )`, (err) => {
+                    if (err) return console.error('[warrior] Migration error (create):', err.message);
+                    scoresDb.run(
+                        `INSERT INTO warrior_submissions_mig
+                         SELECT id,date,uuid,nickname,survival_time,word_count,score,found_words,submitted_at
+                         FROM warrior_submissions`,
+                        (err) => {
+                            if (err) return console.error('[warrior] Migration error (copy):', err.message);
+                            scoresDb.run('DROP TABLE warrior_submissions', (err) => {
+                                if (err) return console.error('[warrior] Migration error (drop):', err.message);
+                                scoresDb.run(
+                                    'ALTER TABLE warrior_submissions_mig RENAME TO warrior_submissions',
+                                    (err) => {
+                                        if (err) return console.error('[warrior] Migration error (rename):', err.message);
+                                        scoresDb.run('CREATE INDEX IF NOT EXISTS idx_ws_date ON warrior_submissions(date)');
+                                        console.log('[warrior] Migration complete.');
+                                    }
+                                );
+                            });
+                        }
+                    );
                 });
-            });
-        });
+            }
+        );
     });
-
-    scoresDb.run('CREATE INDEX IF NOT EXISTS idx_ws_date ON warrior_submissions(date)');
 
     // ------------------------------------------------------------------
     // Promise helpers
