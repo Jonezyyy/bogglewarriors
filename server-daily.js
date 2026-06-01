@@ -177,7 +177,20 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
                 .filter(w => w.length >= 3 && w.length <= 16 && /^[a-zäö]+$/.test(w))
         )];
 
-        const foundWordsJson = JSON.stringify(cleanWords);
+        // Reject words that are not actually findable on this date's board.
+        // Without this check, clients could POST arbitrary words and win the
+        // "unique words" scoring trivially.
+        let validWords;
+        try {
+            const board = await getOrCreateBoard(submittedDate);
+            const boardWordSet = new Set(board.analyzedWords.words.map(w => w.word));
+            validWords = cleanWords.filter(w => boardWordSet.has(w));
+        } catch (err) {
+            console.error('POST /daily/submit board lookup error:', err.message);
+            return res.status(500).json({ error: 'Could not validate submission' });
+        }
+
+        const foundWordsJson = JSON.stringify(validWords);
         const submittedAt = Math.floor(Date.now() / 1000);
 
         try {
@@ -196,7 +209,7 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
             }
 
             // Update daily_word_index atomically for each normalized word
-            for (const w of cleanWords) {
+            for (const w of validWords) {
                 const norm = normalizeWordForDedup(w, singularByPlural);
                 await dbRun(
                     `INSERT INTO daily_word_index (date, normalized_word, submission_count)
@@ -209,7 +222,7 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
             res.json({
                 submissionId: result.lastID,
                 date: submittedDate,
-                wordCount: cleanWords.length,
+                wordCount: validWords.length,
             });
         } catch (err) {
             console.error('POST /daily/submit error:', err.message);

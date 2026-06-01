@@ -290,7 +290,7 @@ function startServer() {
     });
 }
 
-export { app };
+export { app, sanakirjaCache };
 
 /** Resolves once all scores-DB tables have been created. Used by tests. */
 let _resolveDbReady;
