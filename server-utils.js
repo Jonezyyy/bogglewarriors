@@ -166,6 +166,53 @@ export function normalizeWordForDedup(word, singularByPlural) {
 }
 
 /**
+ * Count, for every normalized word, how many different submissions contain it.
+ * A submission counts once per normalized word, so a player who found both
+ * "luti" and "lutit" is still a single owner of that root.
+ *
+ * @param {Array<{found_words: string|string[]}>} submissions
+ * @param {Map<string,string>} singularByPlural
+ * @returns {Map<string, number>}  normalized word → number of submissions
+ */
+export function countOwnersByNormalizedWord(submissions, singularByPlural) {
+    const owners = new Map();
+    for (const sub of submissions) {
+        const words = typeof sub.found_words === 'string'
+            ? JSON.parse(sub.found_words)
+            : sub.found_words;
+        const seen = new Set(words.map(w => normalizeWordForDedup(w, singularByPlural)));
+        for (const norm of seen) owners.set(norm, (owners.get(norm) ?? 0) + 1);
+    }
+    return owners;
+}
+
+/**
+ * Mark each of one player's words as unique, shared, or superseded.
+ * Per normalized root only the highest-scoring form the player found is the
+ * "best form"; the other forms are superseded. A best form is unique when no
+ * other submission owns that root.
+ *
+ * @param {string[]} words  one player's found words, in submission order
+ * @param {Map<string, number>} ownerCounts  from countOwnersByNormalizedWord
+ * @param {Map<string,string>} singularByPlural
+ * @returns {Array<{word: string, normalized: string, ownerCount: number, isUnique: boolean, isSuperseded: boolean}>}
+ */
+export function annotateWords(words, ownerCounts, singularByPlural) {
+    const best = new Map(); // normalized → { word, score }
+    for (const w of words) {
+        const norm = normalizeWordForDedup(w, singularByPlural);
+        const score = calculateWordScore(w);
+        if (!best.has(norm) || score > best.get(norm).score) best.set(norm, { word: w, score });
+    }
+    return words.map(w => {
+        const normalized = normalizeWordForDedup(w, singularByPlural);
+        const ownerCount = ownerCounts.get(normalized) ?? 1;
+        const isBestForm = best.get(normalized).word === w;
+        return { word: w, normalized, ownerCount, isUnique: isBestForm && ownerCount === 1, isSuperseded: !isBestForm };
+    });
+}
+
+/**
  * Compute daily challenge scores across all submissions for a single day.
  * A word scores points only if exactly one player found it (by normalized form).
  * Singular and plural forms of the same root count as the same word.
@@ -175,21 +222,8 @@ export function normalizeWordForDedup(word, singularByPlural) {
  * @returns {Array<{uuid, nickname, score, uniqueWordCount}>}  sorted by score desc
  */
 export function computeDailyScores(submissions, singularByPlural) {
-    // Step 1: map each normalized word → set of UUIDs that found it
-    const wordOwners = new Map();
-    for (const sub of submissions) {
-        const words = typeof sub.found_words === 'string'
-            ? JSON.parse(sub.found_words)
-            : sub.found_words;
-        const seen = new Set();
-        for (const w of words) {
-            const norm = normalizeWordForDedup(w, singularByPlural);
-            if (seen.has(norm)) continue;
-            seen.add(norm);
-            if (!wordOwners.has(norm)) wordOwners.set(norm, new Set());
-            wordOwners.get(norm).add(sub.uuid);
-        }
-    }
+    // Step 1: how many submissions own each normalized word
+    const ownerCounts = countOwnersByNormalizedWord(submissions, singularByPlural);
 
     // Step 2: score each submission — only words with exactly 1 unique owner count.
     // When a player found both singular and plural of the same root, credit the
@@ -213,7 +247,7 @@ export function computeDailyScores(submissions, singularByPlural) {
         let score = 0;
         let uniqueWordCount = 0;
         for (const [norm, s] of bestScore) {
-            if (wordOwners.get(norm)?.size === 1) {
+            if (ownerCounts.get(norm) === 1) {
                 score += s;
                 uniqueWordCount++;
             }

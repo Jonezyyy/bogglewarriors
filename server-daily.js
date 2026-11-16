@@ -7,8 +7,9 @@ import { createDatedBoards } from './dated-board.js';
 import {
     getTodayHelsinki,
     normalizeBoardLetters,
-    normalizeWordForDedup,
     computeDailyScores,
+    countOwnersByNormalizedWord,
+    annotateWords,
     buildSingularByPlural,
     calculateWordScore,
 } from './server-utils.js';
@@ -133,17 +134,6 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
                 throw err;
             }
 
-            // Update daily_word_index atomically for each normalized word
-            for (const w of validWords) {
-                const norm = normalizeWordForDedup(w, singularByPlural);
-                await dbRun(
-                    `INSERT INTO daily_word_index (date, normalized_word, submission_count)
-                     VALUES (?, ?, 1)
-                     ON CONFLICT(date, normalized_word) DO UPDATE SET submission_count = submission_count + 1`,
-                    [submittedDate, norm]
-                );
-            }
-
             res.json({
                 submissionId: result.lastID,
                 date: submittedDate,
@@ -176,14 +166,11 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
             const scored = computeDailyScores(submissions, singularByPlural);
             const top = scored.slice(0, 50);
 
-            // Build normalized word → count map from index table for word annotations
-            let wordIndex = null;
-            if (includeWords) {
-                const indexRows = await dbAll(
-                    'SELECT normalized_word, submission_count FROM daily_word_index WHERE date = ?', [date]
-                );
-                wordIndex = new Map(indexRows.map(r => [r.normalized_word, r.submission_count]));
-            }
+            // Owner counts come from the submissions themselves, the same source the
+            // scores use, so the marks on each word always agree with the points.
+            const ownerCounts = includeWords
+                ? countOwnersByNormalizedWord(submissions, singularByPlural)
+                : null;
 
             const entries = top.map((entry, i) => {
                 const base = {
@@ -195,24 +182,8 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
                 if (includeWords) {
                     const sub = submissions.find(s => s.uuid === entry.uuid);
                     const words = sub ? JSON.parse(sub.found_words) : [];
-                    // Pre-compute best (highest-scoring) form per normalized key so
-                    // the plural is shown as accepted and the singular as superseded.
-                    const bestFormByNorm = new Map();
-                    for (const w of words) {
-                        const norm = normalizeWordForDedup(w, singularByPlural);
-                        const s = calculateWordScore(w);
-                        if (!bestFormByNorm.has(norm) || s > bestFormByNorm.get(norm).score) {
-                            bestFormByNorm.set(norm, { word: w, score: s });
-                        }
-                    }
-                    base.words = words.map(w => {
-                        const norm = normalizeWordForDedup(w, singularByPlural);
-                        const count = wordIndex.get(norm) ?? 1;
-                        const isBestForm = bestFormByNorm.get(norm)?.word === w;
-                        const isUnique = count === 1 && isBestForm;
-                        const isSuperseded = !isBestForm; // lower form of a singular/plural pair
-                        return { word: w, isUnique, isSuperseded };
-                    });
+                    base.words = annotateWords(words, ownerCounts, singularByPlural)
+                        .map(({ word, isUnique, isSuperseded }) => ({ word, isUnique, isSuperseded }));
                     // mark isCurrentPlayer server-side? No — client handles that via uuid in localStorage
                 }
                 return base;
@@ -254,27 +225,18 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
                 return res.json({ found: false });
             }
 
-            const indexRows = await dbAll(
-                'SELECT normalized_word, submission_count FROM daily_word_index WHERE date = ?', [date]
+            const allSubmissions = await dbAll(
+                'SELECT found_words FROM daily_submissions WHERE date = ?', [date]
             );
-            const wordIndex = new Map(indexRows.map(r => [r.normalized_word, r.submission_count]));
+            const ownerCounts = countOwnersByNormalizedWord(allSubmissions, singularByPlural);
 
             const foundWords = JSON.parse(submission.found_words);
-            const counted = new Set();
-            let score = 0;
-            let uniqueWordCount = 0;
-
-            const words = foundWords.map(w => {
-                const norm = normalizeWordForDedup(w, singularByPlural);
-                const stolenByCount = wordIndex.get(norm) ?? 1;
-                const isUnique = stolenByCount === 1 && !counted.has(norm);
-                counted.add(norm);
-                if (isUnique) {
-                    score += calculateWordScore(w);
-                    uniqueWordCount++;
-                }
-                return { word: w, normalized: norm, isUnique, stolenByCount };
-            });
+            const words = annotateWords(foundWords, ownerCounts, singularByPlural)
+                .map(({ word, normalized, isUnique, ownerCount }) =>
+                    ({ word, normalized, isUnique, stolenByCount: ownerCount }));
+            const uniqueWords = words.filter(w => w.isUnique);
+            const score = uniqueWords.reduce((sum, w) => sum + calculateWordScore(w.word), 0);
+            const uniqueWordCount = uniqueWords.length;
 
             res.json({
                 found: true,
