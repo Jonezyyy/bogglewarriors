@@ -23,6 +23,9 @@
     "vitest": "^4.1.2"
   },
   "overrides": {
-    "node-gyp": "^10.3.1"
+    "node-gyp": "^10.3.1",
+    "tar": "^7.5.21",
+    "glob": "^14.0.2",
+    "minimatch": "^11.0.1"
   }
 }
