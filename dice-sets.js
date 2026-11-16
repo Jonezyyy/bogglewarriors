@@ -1,16 +1,7 @@
-// Dice face definitions shared between the browser game and the server.
-// Each string represents the 6 faces of one die.
-// script.js keeps its own inline copy (cannot use ES imports over file://).
-// server-utils.js and daily.js import from here.
+// Dice face definitions for the server and tests (ES module).
+// The data lives in dice-sets.browser.js, a plain script the pages also load,
+// so the server and the browser can never drift apart. Importing it for its
+// side effect sets globalThis.DiceSets.
+import './dice-sets.browser.js';
 
-export const FINNISH_DICE = [
-    "AISPUJ", "AEENEA", "ÄIÖNST", "ANPRSK", "APHSKO",
-    "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU",
-    "AJTOTO", "EITOSS", "ELYTTR", "AKITMV", "AILKVY", "ALRNNU"
-];
-
-export const ENGLISH_DICE = [
-    "AAEEGN", "ABBJOO", "ACHOPS", "AFFKPS", "AOOTTW",
-    "CIMOTU", "DEILRX", "DELRUY", "DISTTY", "EEGHNW",
-    "EEINSU", "EHRTVW", "EIOSST", "ELRTTY", "HIMNUQ", "HLNNRZ"
-];
+export const { FINNISH_DICE, ENGLISH_DICE } = globalThis.DiceSets;

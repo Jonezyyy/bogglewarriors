@@ -10,11 +10,7 @@ const { calculateScore, isSuperseded } = window.GameUtils;
 const API = "https://bogglewarriors-production.up.railway.app";
 const GAME_DURATION = 90; // seconds
 
-const FINNISH_DICE = [
-    "AISPUJ", "AEENEA", "ÄIÖNST", "ANPRSK", "APHSKO",
-    "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU",
-    "AJTOTO", "EITOSS", "ELYTTR", "AKITMV", "AILKVY", "ALRNNU"
-];
+const { FINNISH_DICE } = window.DiceSets; // see dice-sets.browser.js
 
 function randomDiceFace() {
     const dice = [...FINNISH_DICE];

@@ -12,11 +12,7 @@ const GAME_DURATION = 60; // starting seconds
 // Special tile spawn sequence — cycles infinitely: 2x, 2x, 3x, 2x, 2x, 3x, ...
 const SPAWN_SEQUENCE = [2, 2, 3];
 
-const FINNISH_DICE = [
-    "AISPUJ", "AEENEA", "ÄIÖNST", "ANPRSK", "APHSKO",
-    "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU",
-    "AJTOTO", "EITOSS", "ELYTTR", "AKITMV", "AILKVY", "ALRNNU"
-];
+const { FINNISH_DICE } = window.DiceSets; // see dice-sets.browser.js
 
 function randomDiceFace() {
     const dice = [...FINNISH_DICE];
