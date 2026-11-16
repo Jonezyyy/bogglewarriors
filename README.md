@@ -14,7 +14,7 @@ Front-end is plain browser JS (no bundler). `leaderboard.css` is shared styling.
 ## Local Interface & Invariants
 
 ### Server
-- `server.js`: Express app. Routes: `GET /validate-word/:word`, `GET /words`, `POST /words` (admin), `POST /finnish-words` (admin), `POST /board-analysis`, `GET /leaderboard`, `GET /leaderboard/qualifies`, `POST /scores`, `GET /db-version`, `GET /daily`, `GET /daily/:date`, `GET /warrior`, `GET /warrior/:date`. Exports `app`, `sanakirjaCache`, `dbReady` (Promise). Also serves the whole project directory via `express.static`, including `Saved/`.
+- `server.js`: Express app. Routes: `GET /validate-word/:word`, `GET /words`, `POST /words` (admin), `POST /finnish-words` (admin), `POST /board-analysis`, `GET /leaderboard`, `GET /leaderboard/qualifies`, `POST /scores`, `GET /db-version`, `GET /daily`, `GET /daily/:date`, `GET /warrior`, `GET /warrior/:date`. Exports `app`, `sanakirjaCache`, `dbReady` (Promise). Also serves the whole project directory via `express.static`.
 - `server-daily.js`: `registerDailyRoutes(app, scoresDb, sanakirjaCache)` → `GET /daily/board`, `POST /daily/submit`, `GET /daily/leaderboard`, `GET /daily/result`.
 - `server-warrior.js`: `registerWarriorRoutes(app, scoresDb, sanakirjaCache)` → `GET /warrior/board`, `POST /warrior/submit`, `GET /warrior/leaderboard`, `GET /warrior/result`; internal `generateWarriorBoard`, `mulberry32`.
 - `server-utils.js`: `BOARD_SIZE`, `BOARD_CELLS`, `MAX_WORD_LENGTH`, `getScoreMode`, `normalizeBoardLetters`, `buildBoardNeighbors`, `BOARD_NEIGHBORS`, `analyzeFinnishBoard`, `getTodayHelsinki`, `generateDailyBoard`, `normalizeWordForDedup`, `computeDailyScores`, `buildSingularByPlural`.
@@ -41,7 +41,6 @@ Front-end is plain browser JS (no bundler). `leaderboard.css` is shared styling.
 - `[server.js]` `BOARD_SIZE` is 4.
 
 ## Subdirectories & System Boundaries
-- Saved: [./Saved/README.md](./Saved/README.md) - archived early prototype, not served by the live app.
 - `tests/`: test-only (`tests/client`, `tests/server`), run by Vitest; no contract file.
 - `images/`, `sounds/`: static assets (textures, icons, `correct_answer.mp3`, `incorrect_answer.mp3`, `tap.m4a`, `time_up.mp3`); no code.
 
