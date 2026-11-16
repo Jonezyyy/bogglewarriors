@@ -6,44 +6,15 @@
 // Special tiles (2x, 3x) spawn client-side every 5 correct words.
 // Leaderboard is ranked by survival_time DESC.
 
+import { FINNISH_DICE } from './dice-sets.js';
+import { createDatedBoards } from './dated-board.js';
 import {
     getTodayHelsinki,
-    analyzeFinnishBoard,
     calculateWordScore,
 } from './server-utils.js';
 
-const FINNISH_DICE = [
-    "AISPUJ", "AEENEA", "ÄIÖNST", "ANPRSK", "APHSKO",
-    "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU",
-    "AJTOTO", "EITOSS", "ELYTTR", "AKITMV", "AILKVY", "ALRNNU"
-];
-
-// ---------------------------------------------------------------------------
-// Warrior board generation — uses a different seed from the daily board
-// so the same date produces a different layout.
-// Mulberry32 PRNG is copied locally to keep this module self-contained.
-// ---------------------------------------------------------------------------
-
-function mulberry32(seed) {
-    return () => {
-        seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-
-function generateWarriorBoard(dateStr) {
-    // Add a large offset so the PRNG stream is completely different from the daily board
-    const seed = parseInt(dateStr.replace(/-/g, ''), 10) + 10_000_000;
-    const rand = mulberry32(seed);
-    const dice = [...FINNISH_DICE];
-    for (let i = dice.length - 1; i > 0; i--) {
-        const j = Math.floor(rand() * (i + 1));
-        [dice[i], dice[j]] = [dice[j], dice[i]];
-    }
-    return dice.map(die => die[Math.floor(rand() * die.length)].toLowerCase());
-}
+// Added to the date seed so Warrior's PRNG stream differs from the daily board.
+const WARRIOR_SEED_OFFSET = 10_000_000;
 
 // ---------------------------------------------------------------------------
 // registerWarriorRoutes(app, scoresDb, sanakirjaCache)
@@ -126,76 +97,15 @@ export function registerWarriorRoutes(app, scoresDb, sanakirjaCache) {
         );
     });
 
-    // ------------------------------------------------------------------
-    // Promise helpers
-    // ------------------------------------------------------------------
-
-    function dbGet(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            scoresDb.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
-        });
-    }
-
-    function dbAll(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            scoresDb.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
-        });
-    }
-
-    function dbRun(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            scoresDb.run(sql, params, function (err) {
-                err ? reject(err) : resolve({ lastID: this.lastID, changes: this.changes });
-            });
-        });
-    }
-
-    // ------------------------------------------------------------------
-    // Board helpers
-    // ------------------------------------------------------------------
-
-    async function getOrCreateBoard(date) {
-        const existing = await dbGet(
-            'SELECT date, letters, analyzed_words FROM warrior_boards WHERE date = ?', [date]
-        );
-        if (existing) {
-            return {
-                date: existing.date,
-                letters: JSON.parse(existing.letters),
-                analyzedWords: JSON.parse(existing.analyzed_words),
-            };
-        }
-
-        const letters = generateWarriorBoard(date);
-
-        if (!sanakirjaCache) throw new Error('Dictionary cache unavailable');
-        const analysis = analyzeFinnishBoard(letters, sanakirjaCache);
-
-        await dbRun(
-            'INSERT OR IGNORE INTO warrior_boards (date, letters, analyzed_words, created_at) VALUES (?, ?, ?, ?)',
-            [date, JSON.stringify(letters), JSON.stringify(analysis), Math.floor(Date.now() / 1000)]
-        );
-
-        return { date, letters, analyzedWords: analysis };
-    }
-
-    function isValidDate(str) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
-        const d = new Date(str + 'T00:00:00');
-        return !isNaN(d.getTime());
-    }
-
-    function helsinkiStartOfDay(dateStr) {
-        const d = new Date(
-            new Date(dateStr + 'T00:00:00').toLocaleString('en-US', { timeZone: 'Europe/Helsinki' })
-        );
-        return Math.floor(d.getTime() / 1000);
-    }
-
-    function challengeClosesAt(dateStr) {
-        const start = helsinkiStartOfDay(dateStr);
-        return new Date((start + 86400) * 1000).toISOString();
-    }
+    const boards = createDatedBoards({
+        scoresDb,
+        sanakirjaCache,
+        table: 'warrior_boards',
+        diceSet: FINNISH_DICE,
+        seedOffset: WARRIOR_SEED_OFFSET, // different layout from the daily board on the same date
+    });
+    const { get: dbGet, all: dbAll, run: dbRun } = boards.db;
+    const { boardFor: getOrCreateBoard, isValidDate, closesAt: challengeClosesAt } = boards;
 
     /** Compute raw score from an array of word strings (no supersede logic in warrior mode). */
     function computeScore(words) {

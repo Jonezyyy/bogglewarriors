@@ -139,10 +139,11 @@ function mulberry32(seed) {
  * Each element of diceSet is a string of letter-faces (e.g. "AISPUJ").
  * @param {string} dateStr  'YYYY-MM-DD'
  * @param {string[]} diceSet  array of 16 dice strings
+ * @param {number} [seedOffset]  added to the date seed so another mode gets a different board
  * @returns {string[]}  16 lowercase letter strings
  */
-export function generateDailyBoard(dateStr, diceSet) {
-    const seed = parseInt(dateStr.replace(/-/g, ''), 10); // e.g. 20260401
+export function generateDailyBoard(dateStr, diceSet, seedOffset = 0) {
+    const seed = parseInt(dateStr.replace(/-/g, ''), 10) + seedOffset; // e.g. 20260401
     const rand = mulberry32(seed);
     const dice = [...diceSet];
     // Fisher-Yates shuffle

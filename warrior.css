@@ -1,0 +1,246 @@
+/* ─── Warrior Mode Page Styles ───────────────────────────────────────────── */
+
+/* ─── Timer (same as daily.css) ─────────────────────────────────────────── */
+#timer-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+#timer {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.45);
+    padding: 4px 14px;
+    border-radius: 8px;
+    white-space: nowrap;
+}
+
+#timer.warning {
+    color: #ff6b6b;
+}
+
+#round-counter {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 2px 10px;
+    border-radius: 6px;
+}
+
+@keyframes roundBump {
+    0%   { transform: scale(1);    color: rgba(255, 255, 255, 0.7); }
+    30%  { transform: scale(1.35); color: #ffdd00; }
+    60%  { transform: scale(1.15); color: #ffe566; }
+    100% { transform: scale(1);    color: rgba(255, 255, 255, 0.7); }
+}
+
+#round-counter.round-bump {
+    animation: roundBump 0.55s ease forwards;
+}
+
+/* ─── Board top row — constrained to board width, single centered child ── */
+#board-top-row {
+    width: var(--board-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 2px;
+}
+
+#board-top-row #selected-word {
+    width: 100%;
+    text-align: center;
+}
+
+/* ─── Time bonus pop-up ──────────────────────────────────────────────────── */
+#time-bonus {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 36px;
+    font-weight: bold;
+    color: #00ff88;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    opacity: 0;
+    z-index: 10;
+    white-space: nowrap;
+}
+
+#time-bonus.show {
+    animation: timeBonusPop 1.2s ease forwards;
+}
+
+@keyframes timeBonusPop {
+    0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+    20%  { opacity: 1; transform: translate(-50%, -60%) scale(1.15); }
+    55%  { opacity: 1; transform: translate(-50%, -72%) scale(1.05); }
+    100% { opacity: 0; transform: translate(-50%, -88%) scale(0.9); }
+}
+
+/* ─── Special Tiles — 2x (purple) ───────────────────────────────────────── */
+.tile.multiplier-2x {
+    background-color: #7b2ff7;
+    background-image:
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.45) 0%,
+            rgba(255, 255, 255, 0.15) 45%,
+            rgba(0, 0, 0, 0.05) 55%,
+            rgba(0, 0, 0, 0.20) 100%);
+    box-shadow:
+        0 6px 0 #4a1a99,
+        0 8px 10px rgba(0, 0, 0, 0.4);
+    position: relative;
+}
+
+.tile.multiplier-2x.selected {
+    background-color: #5a1fbb;
+    background-image:
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.08) 0%,
+            rgba(0, 0, 0, 0.15) 100%);
+    box-shadow:
+        0 2px 0 #2e0d66,
+        0 3px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Special Tiles — 3x (gold) ─────────────────────────────────────────── */
+.tile.multiplier-3x {
+    background-color: #c8960c;
+    background-image:
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.50) 0%,
+            rgba(255, 255, 255, 0.20) 45%,
+            rgba(0, 0, 0, 0.02) 55%,
+            rgba(0, 0, 0, 0.15) 100%);
+    box-shadow:
+        0 6px 0 #7a5a00,
+        0 8px 10px rgba(0, 0, 0, 0.4);
+    position: relative;
+}
+
+.tile.multiplier-3x.selected {
+    background-color: #9a7000;
+    background-image:
+        linear-gradient(180deg,
+            rgba(255, 255, 255, 0.08) 0%,
+            rgba(0, 0, 0, 0.15) 100%);
+    box-shadow:
+        0 2px 0 #4a3500,
+        0 3px 6px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Multiplier badge (corner label on special tile) ───────────────────── */
+.tile.multiplier-2x::after,
+.tile.multiplier-3x::after {
+    position: absolute;
+    top: 3px;
+    right: 5px;
+    font-size: 15px;
+    font-weight: bold;
+    color: rgba(255, 255, 255, 0.9);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    line-height: 1;
+    pointer-events: none;
+}
+
+.tile.multiplier-2x::after { content: '2×'; }
+.tile.multiplier-3x::after { content: '3×'; }
+
+/* ─── Spawn animation ────────────────────────────────────────────────────── */
+@keyframes specialSpawn {
+    0%   { transform: scale(0.75); filter: brightness(2); }
+    40%  { transform: scale(1.12); filter: brightness(1.4); }
+    70%  { transform: scale(0.97); filter: brightness(1); }
+    100% { transform: scale(1);    filter: brightness(1); }
+}
+
+.tile.special-spawn {
+    animation: specialSpawn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* ─── Tile flip animation (letter refresh on special-tile word) ──────────── */
+#board {
+    perspective: 600px;
+}
+
+@keyframes tileFlipOut {
+    from { transform: rotateY(0deg); }
+    to   { transform: rotateY(90deg); }
+}
+
+@keyframes tileFlipIn {
+    from { transform: rotateY(-90deg); }
+    to   { transform: rotateY(0deg); }
+}
+
+.tile.tile-flip-out {
+    animation: tileFlipOut 0.18s ease-in forwards;
+}
+
+.tile.tile-flip-in {
+    animation: tileFlipIn 0.2s ease-out forwards;
+    background: radial-gradient(circle at 40% 35%, #ffe066 0%, #f0c000 60%, #a07800 100%);
+    box-shadow: 0 0 12px 4px rgba(255, 220, 50, 0.6);
+}
+
+/* ─── Play Again button ──────────────────────────────────────────────────── */
+#play-again-row {
+    text-align: center;
+    margin-top: 16px;
+}
+
+#playAgainBtn {
+    background: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: bold;
+    transition: background 0.2s;
+}
+
+#playAgainBtn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* ─── Responsive overrides ───────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .tile.multiplier-2x::after,
+    .tile.multiplier-3x::after {
+        font-size: 13px;
+        top: 2px;
+        right: 3px;
+    }
+
+    #time-bonus {
+        font-size: 28px;
+    }
+}
+
+@media (max-width: 360px) {
+    .tile.multiplier-2x::after,
+    .tile.multiplier-3x::after {
+        font-size: 11px;
+    }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+    #time-bonus {
+        font-size: 22px;
+    }
+
+    .tile.multiplier-2x::after,
+    .tile.multiplier-3x::after {
+        font-size: 11px;
+    }
+}

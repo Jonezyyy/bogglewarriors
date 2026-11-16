@@ -2,21 +2,17 @@
 // Mounted in server.js via: import { registerDailyRoutes } from './server-daily.js'
 // This module is pure Express — no DB setup, no app startup logic.
 
+import { FINNISH_DICE } from './dice-sets.js';
+import { createDatedBoards } from './dated-board.js';
 import {
     getTodayHelsinki,
-    generateDailyBoard,
     normalizeBoardLetters,
-    analyzeFinnishBoard,
     normalizeWordForDedup,
     computeDailyScores,
     buildSingularByPlural,
     calculateWordScore,
 } from './server-utils.js';
-const FINNISH_DICE = [
-    "AISPUJ", "AEENEA", "ÄIÖNST", "ANPRSK", "APHSKO",
-    "DESRIL", "EIENUS", "HIKNMU", "AKAÄLÄ", "SIOTMU",
-    "AJTOTO", "EITOSS", "ELYTTR", "AKITMV", "AILKVY", "ALRNNU"
-];
+
 
 // ---------------------------------------------------------------------------
 // registerDailyRoutes(app, scoresDb, sanakirjaCache)
@@ -28,85 +24,14 @@ export function registerDailyRoutes(app, scoresDb, sanakirjaCache) {
         ? buildSingularByPlural(sanakirjaCache.metadataByWord)
         : new Map();
 
-    // ------------------------------------------------------------------
-    // Helpers
-    // ------------------------------------------------------------------
-
-    /** Promisified scoresDb.get */
-    function dbGet(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            scoresDb.get(sql, params, (err, row) => err ? reject(err) : resolve(row));
-        });
-    }
-
-    /** Promisified scoresDb.all */
-    function dbAll(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            scoresDb.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
-        });
-    }
-
-    /** Promisified scoresDb.run — resolves with { lastID, changes } */
-    function dbRun(sql, params = []) {
-        return new Promise((resolve, reject) => {
-            scoresDb.run(sql, params, function (err) {
-                err ? reject(err) : resolve({ lastID: this.lastID, changes: this.changes });
-            });
-        });
-    }
-
-    /**
-     * Get or generate the board for a given date.
-     * Side-effect: inserts into daily_boards if missing.
-     */
-    async function getOrCreateBoard(date) {
-        const existing = await dbGet(
-            'SELECT date, letters, analyzed_words FROM daily_boards WHERE date = ?', [date]
-        );
-        if (existing) {
-            return {
-                date: existing.date,
-                letters: JSON.parse(existing.letters),
-                analyzedWords: JSON.parse(existing.analyzed_words),
-            };
-        }
-
-        // Generate deterministically from date seed
-        const letters = generateDailyBoard(date, FINNISH_DICE);
-
-        // Analyze board (needs sanakirjaCache)
-        if (!sanakirjaCache) throw new Error('Dictionary cache unavailable');
-        const analysis = analyzeFinnishBoard(letters, sanakirjaCache);
-
-        await dbRun(
-            'INSERT OR IGNORE INTO daily_boards (date, letters, analyzed_words, created_at) VALUES (?, ?, ?, ?)',
-            [date, JSON.stringify(letters), JSON.stringify(analysis), Math.floor(Date.now() / 1000)]
-        );
-
-        return { date, letters, analyzedWords: analysis };
-    }
-
-    /** Validate a date string: must be YYYY-MM-DD and not in the future. */
-    function isValidDate(str) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(str)) return false;
-        const d = new Date(str + 'T00:00:00');
-        return !isNaN(d.getTime());
-    }
-
-    /** Compute the Helsinki midnight (seconds since epoch) for the start of a date. */
-    function helsinkiStartOfDay(dateStr) {
-        // Parse as midnight Helsinki time
-        const d = new Date(
-            new Date(dateStr + 'T00:00:00').toLocaleString('en-US', { timeZone: 'Europe/Helsinki' })
-        );
-        return Math.floor(d.getTime() / 1000);
-    }
-
-    /** Return ISO timestamp string for when today's challenge closes (Helsinki midnight). */
-    function challengeClosesAt(dateStr) {
-        const start = helsinkiStartOfDay(dateStr);
-        return new Date((start + 86400) * 1000).toISOString();
-    }
+    const boards = createDatedBoards({
+        scoresDb,
+        sanakirjaCache,
+        table: 'daily_boards',
+        diceSet: FINNISH_DICE,
+    });
+    const { get: dbGet, all: dbAll, run: dbRun } = boards.db;
+    const { boardFor: getOrCreateBoard, isValidDate, closesAt: challengeClosesAt } = boards;
 
     // ------------------------------------------------------------------
     // GET /daily/board?date=YYYY-MM-DD

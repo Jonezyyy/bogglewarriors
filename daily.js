@@ -65,7 +65,10 @@ function getStoredProgress() {
 function saveProgress() {
     if (isGameOver) return;
     const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
-    if (challengeDate && challengeDate !== today) return; // only save active today's challenge
+    // Require an active game with a server-confirmed board for today.
+    // Without this, the fake `randomDiceFace()` backdrop drawn behind the
+    // welcome modal would be persisted and later restored as a real board.
+    if (challengeDate !== today) return;
     if (!boardLetters || boardLetters.length !== 16) return;
     try {
         localStorage.setItem(progressKey(), JSON.stringify({
@@ -130,8 +133,6 @@ const shareBtnEl       = document.getElementById('shareBtn');
 // ---------------------------------------------------------------------------
 let boardLetters   = [];
 let foundWords     = new Map();  // word → { nominativePlural, isNominativePlural }
-let selectedTiles  = [];
-let currentWord    = [];
 let timeLeft       = GAME_DURATION;
 let timerInterval  = null;
 let isGameOver     = false;
@@ -139,15 +140,6 @@ let isCountdown    = false;
 let challengeDate  = null;  // will be set from server response
 let viewingDate    = null;  // date currently shown in the results drawer
 let pollInterval   = null;
-let isDragging     = false;
-let dragMoved      = false;
-let touchMoved     = false;
-let pointerActive  = false;
-let _rafPending    = false;
-let _tileCenters   = [];
-let _boardRect     = null;
-let swipeCanvas    = null;
-let swipeCtx       = null;
 
 // Sounds (reuse existing assets)
 const correctSound  = new Audio('sounds/correct_answer.mp3');
@@ -164,245 +156,30 @@ function calculateTotalScore() {
 }
 
 // ---------------------------------------------------------------------------
-// Board rendering
+// Board input (selection, swipe/touch, path canvas) — see board-input.js
 // ---------------------------------------------------------------------------
+const boardInput = window.BoardInput.mount({
+    boardEl,
+    selectedWordEl,
+    getLetters: () => boardLetters,
+    isLocked: () => isGameOver || isCountdown,
+    isOver: () => isGameOver,
+    onSwipeEnd: () => submitWord(),
+    onTileAdded: () => { tapSound.currentTime = 0; tapSound.play().catch(() => {}); },
+    keepSelectionOn: '#submitWord',
+});
+
 function renderBoard(letters) {
-    boardEl.innerHTML = '';
     boardLetters = letters;
-    for (let i = 0; i < 16; i++) {
-        const row = Math.floor(i / 4);
-        const col = i % 4;
-        const tile = document.createElement('div');
-        tile.classList.add('tile');
-        tile.setAttribute('role', 'gridcell');
-        tile.setAttribute('aria-pressed', 'false');
-        tile.setAttribute('aria-label', letters[i].toUpperCase());
-        const span = document.createElement('span');
-        span.textContent = letters[i].toUpperCase();
-        tile.appendChild(span);
-        tile._row = row;
-        tile._col = col;
-        tile.dataset.index = i;
-        boardEl.appendChild(tile);
-    }
-    cacheTileCenters();
-    setupSwipeCanvas();
-    bindTileEvents();
-}
-
-function cacheTileCenters() {
-    _boardRect = boardEl.getBoundingClientRect();
-}
-
-function setupSwipeCanvas() {
-    const old = boardEl.querySelector('.swipe-canvas');
-    if (old) old.remove();
-    const canvas = document.createElement('canvas');
-    canvas.classList.add('swipe-canvas');
-    boardEl.insertBefore(canvas, boardEl.firstChild);
-    swipeCanvas = canvas;
-    swipeCtx = canvas.getContext('2d');
-    _boardRect = boardEl.getBoundingClientRect();
-    const observer = new ResizeObserver(() => {
-        _boardRect = boardEl.getBoundingClientRect();
-        if (selectedTiles.length > 0) {
-            _tileCenters = selectedTiles.map(t => centerOf(t));
-        }
-    });
-    observer.observe(boardEl);
-}
-
-function centerOf(tile) {
-    const r = tile.getBoundingClientRect();
-    const b = _boardRect;
-    return { x: r.left - b.left + r.width * 0.5, y: r.top - b.top + r.height * 0.5 };
-}
-
-function drawSelectionPath() {
-    if (!swipeCanvas || selectedTiles.length === 0) {
-        if (swipeCanvas && swipeCtx) swipeCtx.clearRect(0, 0, swipeCanvas.width, swipeCanvas.height);
-        return;
-    }
-    const boardR = _boardRect || boardEl.getBoundingClientRect();
-    if (swipeCanvas.width !== boardR.width || swipeCanvas.height !== boardR.height) {
-        swipeCanvas.width  = boardR.width;
-        swipeCanvas.height = boardR.height;
-    } else {
-        swipeCtx.clearRect(0, 0, swipeCanvas.width, swipeCanvas.height);
-    }
-    if (_tileCenters.length < 2) return;
-    swipeCtx.beginPath();
-    swipeCtx.moveTo(_tileCenters[0].x, _tileCenters[0].y);
-    for (let i = 1; i < _tileCenters.length; i++) {
-        swipeCtx.lineTo(_tileCenters[i].x, _tileCenters[i].y);
-    }
-    swipeCtx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-    swipeCtx.lineWidth   = 40;
-    swipeCtx.lineCap     = 'round';
-    swipeCtx.lineJoin    = 'round';
-    swipeCtx.stroke();
-}
-
-// Returns the tile under (x, y) only if inside its inner 75% hit area
-function tileAtPoint(x, y) {
-    const el = document.elementFromPoint(x, y);
-    const tile = el ? el.closest('.tile') : null;
-    if (!tile) return null;
-    const r = tile.getBoundingClientRect();
-    const margin = 0.125;
-    const inX = x >= r.left + r.width  * margin && x <= r.right  - r.width  * margin;
-    const inY = y >= r.top  + r.height * margin && y <= r.bottom - r.height * margin;
-    return (inX && inY) ? tile : null;
-}
-
-// ---------------------------------------------------------------------------
-// Tile selection — mouse + touch (matches solo game logic)
-// ---------------------------------------------------------------------------
-function bindTileEvents() {
-    boardEl.addEventListener('mousedown', e => {
-        const tile = e.target.closest('.tile');
-        if (!tile) return;
-        isDragging = true;
-        dragMoved = false;
-        pointerActive = true;
-        selectTile(tile);
-    });
-    boardEl.addEventListener('mousemove', e => {
-        if (!isDragging) return;
-        drawSelectionPath();
-        const tile = tileAtPoint(e.clientX, e.clientY);
-        if (!tile) return;
-        const last = selectedTiles[selectedTiles.length - 1];
-        if (tile !== last) {
-            dragMoved = true;
-            swipeToTile(tile);
-        }
-    });
-    document.addEventListener('mouseup', () => {
-        if (!isDragging) return;
-        isDragging = false;
-        pointerActive = false;
-        if (dragMoved) submitWord();
-    });
-    boardEl.addEventListener('touchstart', e => {
-        e.preventDefault();
-        touchMoved = false;
-        pointerActive = true;
-        const touch = e.touches[0];
-        const el = document.elementFromPoint(touch.clientX, touch.clientY);
-        const tile = el ? el.closest('.tile') : null;
-        if (tile) selectTile(tile);
-    }, { passive: false });
-    boardEl.addEventListener('touchmove', e => {
-        e.preventDefault();
-        const touch = e.touches[0];
-        const tile = tileAtPoint(touch.clientX, touch.clientY);
-        const lenBefore = selectedTiles.length;
-        swipeToTile(tile);
-        if (selectedTiles.length !== lenBefore) touchMoved = true;
-        if (!_rafPending) {
-            _rafPending = true;
-            requestAnimationFrame(() => { drawSelectionPath(); _rafPending = false; });
-        }
-    }, { passive: false });
-    boardEl.addEventListener('touchend', () => {
-        if (isGameOver || isCountdown) return;
-        pointerActive = false;
-        if (!touchMoved) return;
-        touchMoved = false;
-        submitWord();
-    });
-    document.addEventListener('touchstart', e => {
-        if (isGameOver) return;
-        if (selectedTiles.length === 0) return;
-        const touch = e.touches[0];
-        const el = document.elementFromPoint(touch.clientX, touch.clientY);
-        const isInsideBoard = el && boardEl.contains(el);
-        const isButton = el && el.closest('#submitWord');
-        if (!isInsideBoard && !isButton) {
-            clearSelection();
-        }
-    }, { passive: true });
-}
-
-function tileIndex(tile) { return parseInt(tile.dataset.index, 10); }
-
-function isAdjacent(tile) {
-    if (selectedTiles.length === 0) return true;
-    const last = selectedTiles[selectedTiles.length - 1];
-    return Math.abs(last._row - tile._row) <= 1 && Math.abs(last._col - tile._col) <= 1;
-}
-
-function selectTile(tile) {
-    if (isGameOver || isCountdown) return;
-    if (selectedTiles.includes(tile)) {
-        const idx = selectedTiles.indexOf(tile);
-        const removed = selectedTiles.splice(idx);
-        currentWord.splice(idx);
-        _tileCenters.splice(idx);
-        removed.forEach(t => { t.classList.remove('selected'); t.setAttribute('aria-pressed', 'false'); });
-        updateDisplay();
-        return;
-    }
-    if (selectedTiles.length > 0 && !isAdjacent(tile)) return;
-    tile.classList.add('selected');
-    tile.setAttribute('aria-pressed', 'true');
-    currentWord.push(boardLetters[tileIndex(tile)].toLowerCase());
-    selectedTiles.push(tile);
-    _tileCenters.push(centerOf(tile));
-    tapSound.currentTime = 0; tapSound.play().catch(() => {});
-    updateDisplay();
-}
-
-function swipeToTile(tile) {
-    if (isGameOver || isCountdown) return;
-    if (!tile) return;
-    const last = selectedTiles[selectedTiles.length - 1];
-    if (tile === last) return;
-    // Rubber-band: swiping back to second-to-last deselects the last tile
-    const secondToLast = selectedTiles[selectedTiles.length - 2];
-    if (tile === secondToLast) {
-        const removed = selectedTiles.pop();
-        currentWord.pop();
-        _tileCenters.pop();
-        removed.classList.remove('selected');
-        removed.setAttribute('aria-pressed', 'false');
-        updateDisplay();
-        return;
-    }
-    if (selectedTiles.includes(tile)) return;
-    if (!isAdjacent(tile)) return;
-    tile.classList.add('selected');
-    tile.setAttribute('aria-pressed', 'true');
-    currentWord.push(boardLetters[tileIndex(tile)].toLowerCase());
-    selectedTiles.push(tile);
-    _tileCenters.push(centerOf(tile));
-    tapSound.currentTime = 0; tapSound.play().catch(() => {});
-    updateDisplay();
-}
-
-function clearSelection() {
-    selectedTiles.forEach(t => { t.classList.remove('selected'); t.setAttribute('aria-pressed', 'false'); });
-    selectedTiles = [];
-    currentWord = [];
-    _tileCenters = [];
-    if (swipeCanvas && swipeCtx) swipeCtx.clearRect(0, 0, swipeCanvas.width, swipeCanvas.height);
-    selectedWordEl.textContent = '';
-    selectedWordEl.style.color = 'white';
-}
-
-function updateDisplay() {
-    selectedWordEl.style.color = 'white';
-    selectedWordEl.textContent = currentWord.join('').toUpperCase();
-    drawSelectionPath();
+    boardInput.render();
 }
 
 // ---------------------------------------------------------------------------
 // Word submission
 // ---------------------------------------------------------------------------
 async function submitWord() {
-    const word = currentWord.join('').toLowerCase();
-    clearSelection();
+    const word = boardInput.word();
+    boardInput.clear();
 
     if (word.length < 3) { flash('Too short — at least 3 letters', '#ff9900', 2000); return; }
     if (foundWords.has(word)) { flash('Word already found!', '#ff9900', 2000); return; }
@@ -552,7 +329,7 @@ async function endGame() {
     if (isGameOver) return;
     clearInterval(timerInterval);
     isGameOver = true;
-    clearSelection();
+    boardInput.clear();
     gameEl.classList.add('game-over');
     timerEl.textContent = "Time's up!";
     timerEl.classList.add('warning');
@@ -983,19 +760,38 @@ async function init() {
     if (progress && progress.date === today
         && Array.isArray(progress.boardLetters) && progress.boardLetters.length === 16
         && typeof progress.timeLeft === 'number' && progress.timeLeft > 0) {
-        challengeDate = today;
-        resultsDateEl.textContent = `Challenge date: ${challengeDate}`;
-        boardLetters = progress.boardLetters;
-        renderBoard(boardLetters);
-        gameEl.classList.remove('hidden');
-        // Restore found words
-        foundWords = new Map(progress.foundWords || []);
-        timeLeft = progress.timeLeft;
-        totalScoreEl.textContent = calculateTotalScore();
-        updateFoundWordsList();
-        // Resume directly into the timer (skip welcome modal + countdown)
-        startTimer();
-        return;
+        // Verify the stored board actually matches today's real board before
+        // trusting it. Otherwise stale/fake letters could be resumed and the
+        // server would reject every submitted word.
+        let serverBoard;
+        try {
+            const r = await fetch(`${API}/daily/board?date=${today}`);
+            serverBoard = await r.json();
+        } catch (_) { /* network failure — fall through to fresh start */ }
+
+        const matchesToday = serverBoard
+            && Array.isArray(serverBoard.letters)
+            && serverBoard.letters.length === 16
+            && serverBoard.letters.every((l, i) => l === progress.boardLetters[i]);
+
+        if (matchesToday) {
+            challengeDate = today;
+            resultsDateEl.textContent = `Challenge date: ${challengeDate}`;
+            boardLetters = progress.boardLetters;
+            renderBoard(boardLetters);
+            gameEl.classList.remove('hidden');
+            // Restore found words
+            foundWords = new Map(progress.foundWords || []);
+            timeLeft = progress.timeLeft;
+            totalScoreEl.textContent = calculateTotalScore();
+            updateFoundWordsList();
+            // Resume directly into the timer (skip welcome modal + countdown)
+            startTimer();
+            return;
+        }
+
+        // Stored progress is stale — discard and fall through to fresh start.
+        clearProgress();
     }
 
     // First time today — show the board behind the modal immediately

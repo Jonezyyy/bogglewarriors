@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boggle Warriors — Warrior Mode</title>
+    <link rel="icon" type="image/svg+xml" href="images/fav_icon.svg">
+    <link rel="stylesheet" href="styles.css?v=31">
+    <link rel="stylesheet" href="warrior.css?v=5">
+</head>
+<body>
+
+    <!-- Top bar -->
+    <div id="top-bar">
+        <button id="backBtn" class="icon-btn" type="button" aria-label="Back to game">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+            </svg>
+        </button>
+        <div id="timer-group">
+            <div id="timer">1:00</div>
+            <div id="round-counter">Round 1</div>
+        </div>
+        <button id="leaderboardBtn" class="icon-btn" aria-label="Results">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                 stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 9H4a2 2 0 0 1-2-2V5h4"/>
+                <path d="M18 9h2a2 2 0 0 0 2-2V5h-4"/>
+                <path d="M6 5h12v6a6 6 0 0 1-12 0V5z"/>
+                <path d="M12 17v4"/>
+                <path d="M8 21h8"/>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Game area -->
+    <div id="game" class="hidden">
+        <div id="board-container">
+            <div id="board-top-row">
+                <div id="selected-word" role="status" aria-live="polite" aria-atomic="true">Get ready!</div>
+            </div>
+            <div id="time-bonus" aria-live="polite" aria-atomic="true"></div>
+            <div id="board" role="grid" aria-label="Boggle board"></div>
+        </div>
+        <div id="buttons" class="daily-buttons">
+            <button id="submitWord">Submit</button>
+        </div>
+        <div id="sidebar">
+            <h3>Score: <span id="totalScore">0</span></h3>
+            <h3 id="foundWordsHeading">Found Words: 0</h3>
+            <div id="foundWordsContainer">
+                <div class="found-words-category">
+                    <h4>3-4 letters</h4>
+                    <ul id="foundWords-34" class="found-words-list"></ul>
+                </div>
+                <div class="found-words-category">
+                    <h4>5 letters</h4>
+                    <ul id="foundWords-5" class="found-words-list"></ul>
+                </div>
+                <div class="found-words-category">
+                    <h4>6 letters</h4>
+                    <ul id="foundWords-6" class="found-words-list"></ul>
+                </div>
+                <div class="found-words-category">
+                    <h4>7+ letters</h4>
+                    <ul id="foundWords-7plus" class="found-words-list"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results drawer (slides in from right) -->
+    <div id="resultsOverlay" class="drawer-overlay" role="dialog" aria-modal="true" aria-labelledby="resultsTitle" aria-hidden="true">
+        <div class="drawer drawer-right">
+            <div class="drawer-close-row">
+                <button class="drawer-close" id="resultsClose" aria-label="Close results">&#10005;</button>
+            </div>
+            <h2 id="resultsTitle">&#9876; Warrior Results</h2>
+            <p id="results-date" class="drawer-subtitle"></p>
+            <p id="results-summary" class="drawer-subtitle daily-summary"></p>
+            <p id="playing-as-label" class="drawer-subtitle"></p>
+            <div id="players-list"></div>
+            <p class="poll-notice">Updates every 30 seconds</p>
+            <div id="play-again-row">
+                <button id="playAgainBtn">&#9876; Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nickname modal (shown before game if no nickname stored) -->
+    <div id="nicknameOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="warriorNicknameTitle" aria-hidden="true">
+        <div class="modal">
+            <h2 id="warriorNicknameTitle">Warrior Mode</h2>
+            <p>Enter your nickname to start.</p>
+            <input id="nicknameInput" type="text" maxlength="20" placeholder="Nickname..." autocomplete="off" />
+            <div id="nicknameError"></div>
+            <div class="nickname-actions">
+                <button id="nicknameSubmit" disabled>Let's go!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Welcome back modal (returning user, hasn't played today) -->
+    <div id="welcomeOverlay" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="welcomeTitle" aria-hidden="true">
+        <div class="modal">
+            <h2 id="welcomeTitle">Warrior Mode</h2>
+            <p>Welcome back,</p>
+            <div class="welcome-name-row">
+                <span id="welcomeName"></span>
+                <button id="changeNameBtn" class="icon-btn" aria-label="Change nickname" title="Change nickname">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="nickname-actions">
+                <button id="welcomeStart">Start game</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="game-utils.browser.js?v=1"></script>
+    <script src="board-input.js?v=1"></script>
+    <script src="warrior.js?v=4"></script>
+</body>
+</html>
