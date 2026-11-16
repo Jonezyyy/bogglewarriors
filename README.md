@@ -28,7 +28,6 @@ Front-end is plain browser JS (no bundler). `leaderboard.css` is shared styling.
 - `daily.js`: daily client; uses `localStorage` keys `bw_uuid`, `bw_nickname`, `bw_daily_<date>` (result), `bw_daily_progress_<date>`; calls `/daily/board`, `/daily/submit`, `/daily/leaderboard`.
 - `warrior.js`: warrior client; keys `bw_warrior_<date>` and `bw_warrior_progress_<date>`; calls `/warrior/board`, `/warrior/submit`, `/warrior/leaderboard`.
 - `.htaccess`: rewrites non-file `daily(/...)` requests to `/daily.html`.
-- `.github/workflows/main_my-node-app-linux.yml`: deployment workflow.
 
 ### Invariants
 - `[server.js:requireAdmin]` Admin routes return 403 unless `ADMIN_KEY` is set and matches header `x-admin-key`.
