@@ -1,12 +1,26 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { app, dbReady } from '../../server.js';
+import { app, dbReady, sanakirjaCache } from '../../server.js';
+import { analyzeFinnishBoard } from '../../server-utils.js';
 
 // Today's Helsinki date — same logic the server uses
 const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Helsinki' });
 
+// Words actually findable on today's board — populated in beforeAll.
+// The server now rejects any submitted word that isn't on the date's board,
+// so tests must submit real board words.
+const boardWords = [];
+
 // Wait for all DB tables to be created before any test runs
-beforeAll(async () => { await dbReady; });
+beforeAll(async () => {
+    await dbReady;
+    const res = await request(app).get('/daily/board');
+    const analysis = analyzeFinnishBoard(res.body.letters, sanakirjaCache);
+    for (const entry of analysis.words) boardWords.push(entry.word);
+    if (boardWords.length < 8) {
+        throw new Error(`Today's board has too few words for tests: ${boardWords.length}`);
+    }
+});
 
 // ---------------------------------------------------------------------------
 // GET /daily/board
@@ -65,7 +79,7 @@ describe('POST /daily/submit', () => {
         const res = await request(app).post('/daily/submit').send({
             uuid,
             nickname: 'Tester',
-            foundWords: ['koira', 'talo', 'sana'],
+            foundWords: boardWords.slice(0, 3),
             date: today,
         });
         expect(res.status).toBe(200);
@@ -78,7 +92,7 @@ describe('POST /daily/submit', () => {
         const res = await request(app).post('/daily/submit').send({
             uuid,
             nickname: 'Tester',
-            foundWords: ['koira'],
+            foundWords: [boardWords[0]],
             date: today,
         });
         expect(res.status).toBe(409);
@@ -116,12 +130,23 @@ describe('POST /daily/submit', () => {
     it('silently strips words with invalid characters', async () => {
         const res = await request(app).post('/daily/submit').send({
             uuid: crypto.randomUUID(), nickname: 'X',
-            foundWords: ['val1d', '123', 'ok!', 'koira'],
+            foundWords: ['val1d', '123', 'ok!', boardWords[0]],
             date: today,
         });
         expect(res.status).toBe(200);
-        // Only 'koira' (valid Finnish) passes the filter
+        // Only the real board word passes the filter
         expect(res.body.wordCount).toBe(1);
+    });
+
+    it('rejects words not findable on the board', async () => {
+        const res = await request(app).post('/daily/submit').send({
+            uuid: crypto.randomUUID(), nickname: 'X',
+            // 'zzzzz' is not on any board
+            foundWords: ['zzzzz'],
+            date: today,
+        });
+        expect(res.status).toBe(200);
+        expect(res.body.wordCount).toBe(0);
     });
 });
 
@@ -133,17 +158,23 @@ describe('GET /daily/leaderboard', () => {
     const uuidA = `lb-a-${crypto.randomUUID()}`;
     const uuidB = `lb-b-${crypto.randomUUID()}`;
 
+    // Word roles assigned from today's board
+    let sharedWord, aliceOnlyWord, bobOnlyWord;
+
     beforeAll(async () => {
-        // Alice: 'talo' is shared; 'piste' is unique to her
+        sharedWord    = boardWords[3];
+        aliceOnlyWord = boardWords[4];
+        bobOnlyWord   = boardWords[5];
+        // Alice: shared word + a word unique to her
         await request(app).post('/daily/submit').send({
             uuid: uuidA, nickname: 'Alice',
-            foundWords: ['talo', 'piste'],
+            foundWords: [sharedWord, aliceOnlyWord],
             date: today,
         });
-        // Bob: 'talo' is shared; 'meri' is unique to Bob
+        // Bob: shared word + a word unique to him
         await request(app).post('/daily/submit').send({
             uuid: uuidB, nickname: 'Bob',
-            foundWords: ['talo', 'meri'],
+            foundWords: [sharedWord, bobOnlyWord],
             date: today,
         });
     });
@@ -178,7 +209,7 @@ describe('GET /daily/leaderboard', () => {
     it('uniqueWordCount reflects only unshared words', async () => {
         const res = await request(app).get(`/daily/leaderboard?date=${today}`);
         const alice = res.body.entries.find(e => e.nickname === 'Alice');
-        // 'piste' is Alice-only; 'talo' is shared with Bob
+        // aliceOnlyWord is Alice-only; sharedWord is shared with Bob
         expect(alice.uniqueWordCount).toBe(1);
     });
 
@@ -191,18 +222,18 @@ describe('GET /daily/leaderboard', () => {
         expect(alice.words[0]).toHaveProperty('isUnique');
     });
 
-    it('unique word (piste) is marked isUnique:true for Alice', async () => {
+    it('unique word is marked isUnique:true for Alice', async () => {
         const res = await request(app).get(`/daily/leaderboard?date=${today}&includeWords=true`);
         const alice = res.body.entries.find(e => e.nickname === 'Alice');
-        const piste = alice.words.find(w => w.word === 'piste');
-        expect(piste?.isUnique).toBe(true);
+        const w = alice.words.find(w => w.word === aliceOnlyWord);
+        expect(w?.isUnique).toBe(true);
     });
 
-    it('shared word (talo) is marked isUnique:false', async () => {
+    it('shared word is marked isUnique:false', async () => {
         const res = await request(app).get(`/daily/leaderboard?date=${today}&includeWords=true`);
         const alice = res.body.entries.find(e => e.nickname === 'Alice');
-        const talo = alice.words.find(w => w.word === 'talo');
-        expect(talo?.isUnique).toBe(false);
+        const w = alice.words.find(w => w.word === sharedWord);
+        expect(w?.isUnique).toBe(false);
     });
 
     it('returns 400 for invalid date', async () => {
@@ -220,7 +251,8 @@ describe('GET /daily/result', () => {
     beforeAll(async () => {
         await request(app).post('/daily/submit').send({
             uuid, nickname: 'Charlie',
-            foundWords: ['kissa', 'auto'],   // unique words not used by other tests
+            // Words not used by other tests in this file
+            foundWords: [boardWords[6], boardWords[7]],
             date: today,
         });
     });
@@ -253,7 +285,7 @@ describe('GET /daily/result', () => {
 
     it('sole submitter of these words — both are unique', async () => {
         const res = await request(app).get(`/daily/result?date=${today}&uuid=${uuid}`);
-        // 'kissa' and 'auto' are only submitted by Charlie in this test suite
+        // boardWords[6] and boardWords[7] are only submitted by Charlie in this test suite
         for (const w of res.body.words) {
             expect(w.isUnique).toBe(true);
         }
